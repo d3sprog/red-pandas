@@ -1,0 +1,137 @@
+\documentclass{article}
+\usepackage[sfdefault,lf]{carlito}
+\usepackage[colorlinks]{hyperref}
+\usepackage[T1]{fontenc}
+\usepackage{inconsolata}
+\usepackage{listings}
+\usepackage[usenames,dvipsnames]{xcolor}
+\urlstyle{sf}
+
+\lstdefinestyle{mystyle}{
+    commentstyle=\color{ForestGreen},
+    keywordstyle=\color{NavyBlue},
+    stringstyle=\color{Maroon},
+    basicstyle=\ttfamily\footnotesize
+}
+
+\lstdefinelanguage{TypeScript}{
+  keywords={break, case, catch, continue, debugger, default, delete, do, else, false, finally, for, function, if, in, instanceof, new, null, return, switch, this, throw, true, try, typeof, var, void, while, with, extends, string},
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]",
+  ndkeywords={class, export, boolean, throw, implements, import, this},
+  sensitive=true
+}
+\lstset{style=mystyle}
+\begin{document}
+\title{Type systems for data science scripting libraries}
+\maketitle
+
+\section{Introduction}
+We want to be able to check typical data science scripts (notebooks) for various errors using a type system. Libraries like pandas and matplotlib (Python) or ggplot and dplyr (R) use various very dynamic tricks that make this harder and interesting.
+
+It would be nice if we could provide the usual benefits of type systems - give programmers early error when they try to do something invalid (or possibly warnings if they do something potentially wrong) and perhaps also improve auto-complete etc.
+
+This may be less practically important in interactive data science (where people often run code and see preview of results immediately and so they can check for errors at runtime), but there should still be a few cases where types can help!
+
+\section{Motivating example}
+We can start with some "hand-picked" examples from popular data science books, tutorials and samples (such as examples on Kaggle or elsewhere online).
+
+\paragraph{Financial Times recycling.}
+My favorite example are the notebooks on recycling created by journalists at Financial Times for this article: \url{https://www.ft.com/content/360e2524-d71a-11e8-a854-33d6f82e62f8}.
+The source code is available here: \url{https://github.com/ft-interactive/recycling-is-broken-notebooks/}. The repository sadly does not contain the exact data files on which this was run (just links to databases from where they got it). It would be nice if we could reproduce it, but we can also just use it as inspiration.
+
+\paragraph{Experiments in this repo.}
+I also created some experiments in the \texttt{experiments} folder in this repo (this is using Python and pandas in JupyterLab). See \texttt{README.md} for installation instructions.
+
+Here is one particularly ugly example. Given a dataframe \texttt{tn} with data on Titanic passangers, we group the passangers by the decade of their age (i.e., 20s, 30s, 40s, etc.)
+and count how many people survived in each group (using sum of the values in the \texttt{Survived}
+column, which is 1 or 0), count the number of people in each group and calculate the survival rate:
+
+\begin{lstlisting}[language=Python]
+# Drop rows that have NA in the Age column
+withage = tn[tn["Age"].notna()]
+
+withage \
+  # Group by an int-valued series computed from Age
+  .groupby((withage["Age"]/10).astype(int)) \
+
+  # Aggregate specified columns using specified functions
+  .agg({"Survived":"sum", "PassengerId":"count"}) \
+
+  # Rename column (axis=1 specifies it is a column)
+  .rename({"PassengerId":"Total"},axis=1) \
+
+  # Compute the Rate column. Pipe is useful here, because
+  # we need to refer to 'df' multiple times inside.
+  .pipe(lambda df:
+      df.assign(Rate=(df["Survived"]/df["Total"]).round(2)))
+\end{lstlisting}
+Here are some things we could possibly check:
+
+\begin{itemize}
+\item When indexing into a dataframe using a series (as in \texttt{tn[tn["Age"].notna()]}),
+  we should check that the series and the dataframe are compatible (have the same index?)
+
+\item We want to be able to check that columns with given names like \texttt{"Age"} exist and
+  have suitable type (also check that they may contain or cannot contain NA?) We probably load
+  the data from somewhere - but we can assume we can parse the input CSV and infer types (or get a representative sample).
+
+\item \texttt{rename} is an interesting operation - can we transform the column names according to
+  the mapping specified in the record? Also note that if \texttt{axis} is 0, it transforms row index (and not column names).
+
+\item \texttt{groupby} creates something strange representing grouped data frame; \texttt{agg}
+  then specifies aggregation. Here, we need to check that the columns to be aggregated exist and have the right type (and produce new aggregated dataframe type). You can also use \texttt{count} or \texttt{sum} on grouped dataframe, which sums/counts values of all columns on which the operation makes sense (but sum seems to append all string values?).
+\end{itemize}
+
+\paragraph{Analysing code on GitHub.}
+It would be nice to know what kind of code people actually write using pandas and Python. We could find out by analysing notebooks on GitHub (which makes for a nice student project?) Colleagues at FIT have a nice tool for fetching code from GitHub in a reproducible and sensible way that we should use: \url{https://drops.dagstuhl.de/storage/00lipics/lipics-vol194-ecoop2021/LIPIcs.ECOOP.2021.6/LIPIcs.ECOOP.2021.6.pdf}
+
+\section{Type system}
+The basic type will be some sort of representation of a typed dataframe with multiple columns. We will also need a series and possibly some representation for indices.
+
+The tricky thing is how to express the types of operations. I would initially not worry about type checking their implementation (in pandas, they are probably in C++ anyway?) but we need to be able to specify their type.
+
+\paragraph{TypeScript examples.}
+It turns out a lot of fancy type system magic with records can be done in TypeScript (check out the \texttt{typescript} directory). Two examples:
+
+\begin{lstlisting}[language=TypeScript]
+// Omit<T, K> is a library defined helper using type-level magic
+// (but it generates a record that contains the same fields as T
+// except that the field K is removed - K is a string literal type)
+function drop<T, K extends string>(data:T[], key:K) : Omit<T, K>[] {
+  throw "not implemented"
+}
+
+// This is using "Mapped types" (a type-level iteration over types
+// here obtained using keyof). For each field P, we then return a new
+// field which is K2 (if P=K1) or P (otherwise) of the same type
+// as the original field (T[P]). The trick is using Conditional Types
+// (via extends check, which really mostly seems to be equality test?)
+function rename1<T, K1 extends string, K2 extends string>
+    (data:T[], k1:K1, k2:K2) :
+      { [P in keyof T as (P extends K1 ? K2 : P)]: T[P] }[] {
+  throw "not implemented"
+}
+\end{lstlisting}
+
+Those things tend to get pretty ugly, but it is impressive what can be expressed...
+See: \url{https://www.typescriptlang.org/docs/handbook/2/mapped-types.html}
+
+\paragraph{Two directions of analysis.}
+A program analysis can be top-down or bottom-up. When we load data and know the type of a dataframe at the start, we can then proceed top-down (we have the type, we check that it is compatible with all the operations that we want to do on it). But when we have a function, we do not know the type:
+
+\begin{lstlisting}[language=Python]
+def bydecade(df, col):
+  return df.groupby((df[col]/10).astype(int)).count()
+\end{lstlisting}
+
+Could the type system work in the bottom-up direction, essentially collecting constraints on the variables? Here, it would figure out that \texttt{df} has to have a column \texttt{col}, which needs to be numerical.
+
+How would this look in the typing rules? Would they be the same for top-down and bottom-up, but the implementation would differ? Can we learn some tricks from bidirectional type checking (of dependent types)?
+
+\section{Remarks}
+The grant application funding this (just for information and as a source of ideas). It does not need to be followed directly as this is extremely flexible! \url{https://d3s.mff.cuni.cz/projects/primus24/}
+
+\end{document}
