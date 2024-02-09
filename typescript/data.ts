@@ -17,6 +17,14 @@ function drop<T, K extends string>(data:T[], key:K) : Omit<T, K>[] {
 drop(tn, "survived")[0].name
 drop(tn, "survived")[0].survived // ERROR
 
+// Inlined the definition of Omit (but not sure how Exclude works!)
+function drop2<T, K extends string>(data:T[], key:K) : { [P in Exclude<keyof T, K>] : T[P] }[] {
+  throw "not implemented"
+}
+
+drop2(tn, "survived")[0].name
+drop2(tn, "survived")[0].survived // ERROR
+
 
 // "rename column"
 // (can this be extended to take a record of renamings? no idea...)
