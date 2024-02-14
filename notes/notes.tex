@@ -93,6 +93,7 @@ The basic type will be some sort of representation of a typed dataframe with mul
 
 The tricky thing is how to express the types of operations. I would initially not worry about type checking their implementation (in pandas, they are probably in C++ anyway?) but we need to be able to specify their type.
 
+\vspace{-0.3em}
 \paragraph{TypeScript examples.}
 It turns out a lot of fancy type system magic with records can be done in TypeScript (check out the \texttt{typescript} directory). Two examples:
 
@@ -119,6 +120,7 @@ function rename1<T, K1 extends string, K2 extends string>
 Those things tend to get pretty ugly, but it is impressive what can be expressed...
 See: \url{https://www.typescriptlang.org/docs/handbook/2/mapped-types.html}
 
+\vspace{-0.3em}
 \paragraph{Two directions of analysis.}
 A program analysis can be top-down or bottom-up. When we load data and know the type of a dataframe at the start, we can then proceed top-down (we have the type, we check that it is compatible with all the operations that we want to do on it). But when we have a function, we do not know the type:
 
@@ -131,8 +133,74 @@ Could the type system work in the bottom-up direction, essentially collecting co
 
 How would this look in the typing rules? Would they be the same for top-down and bottom-up, but the implementation would differ? Can we learn some tricks from bidirectional type checking (of dependent types)?
 
+\vspace{-0.3em}
+\paragraph{Refining types based on values.}
+One of the problems we are facing is that there are cases where we really cannot know the type before we run some code. Typical example is loading data from an external data source. Let's say
+the user writes \texttt{tn = pd.read\_csv("titanic.csv")}. What can we do about this?
+
+The first obvious option is to require the user to provide a sample of the data that we can
+statically parse (this is what F\# type providers require). We would either require that
+\texttt{read\_csv} has a literal argument that we can parse (so that we can locate the file)
+or that user adds some annotation with a sampe file we can locate and parse. This is relatively
+easy and would work fine for basic use cases.
+
+However, there are also operations that are dynamic in principle and turn values into types
+(i.e., turning values from a dataframe into the names of columns of a new frame). The
+\texttt{pivot} operation is one example:
+
+\vspace{1em}
+\hspace{-1em}
+\begin{tabular}{llll}
+\textbf{(index)} & \textbf{row} & \textbf{col} & \textbf{val}  \\ \hline
+\textbf{0} & a   & x   & 1    \\
+\textbf{1} & a   & y   & 2    \\
+\textbf{2} & b   & x   & 3    \\
+\textbf{3} & b   & y   & 4
+\end{tabular}
+\quad
+$\Rightarrow$
+\begin{array}{l}
+\texttt{pd.pivot(df,}\\
+\texttt{    index="row",}\\
+\texttt{    columns="col",} \\
+\texttt{    values="val")}
+\end{array}
+$\Rightarrow$
+\qquad
+\begin{tabular}{lll}
+\textbf{(row)} & \textbf{x} & \textbf{y} \\ \hline
+\textbf{a} & 1 & 2 \\
+\textbf{b} & 3 & 4 \\
+\end{tabular}
+\vspace{1em}
+
+There is no way to type check this in general. Again, we could ask the user for an annotation,
+but they may not be happy about this. If they run the code in Jupyter notebook, they can just
+run the code and see the resulting data frame in the output! So why should they have to provide
+an annotation?
+
+One alternative (perhaps more creative and going against accepted wisdom) is that we could
+refine the type based on evaluated values. The idea is that the type checker will start with some
+general type (the return type of \texttt{pd.read\_csv} is just \texttt{Dataframe}). If the user
+later runs the code that does this (perhaps evaluate the first cell in a notebook, but not the
+rest of the notebook), we use the runtime values to make the type more precise (\texttt{Dataframe}
+becomes \texttt{Dataframe<name:string, age:int>}). We then use this refined type to re-type check
+the rest of the program (remaining cells in the notebook) and report potential type errors there.
+Formally, we would define something like $\mathit{refine}(\tau, v) = \tau'$. The nice thing about
+this is that it is general (it works with \texttt{pivot} too - if you use it, you just have to run
+the code to get types for the rest of your notebook\footnote{Jupyter notebooks store outputs, so we
+could in fact use those even without running the code.}) It is an unusual thing to do in a type
+system (you do not typically have any values!) but it makes sense in the context of interactive
+notebooks that are evaluated cell-by-cell.
+
+This is something I experimented with in the
+Histogram project (see \url{https://tomasp.net/histogram/#s5_2}). That is a minimalistic programming environment, so things are easier there, but it implements the idea.
+
+
 \section{Remarks}
 If we want a realistic implementation, can it be done as an extension of mypy (\url{https://mypy-lang.org}) and possibly using standard Python type annotations in some way?
+
+Are there some type annotations for standard libraries like pandas? We need to check. There may be some, but it is likely they will not be precise enough for us.
 
 The grant application funding this (just for information and as a source of ideas). It does not need to be followed directly as this is extremely flexible! \url{https://d3s.mff.cuni.cz/projects/primus24/}
 
