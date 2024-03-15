@@ -158,14 +158,14 @@ However, there are also operations that are dynamic in principle and turn values
 \textbf{3} & b   & y   & 4
 \end{tabular}
 \quad
-$\Rightarrow$
+$\Rightarrow
 \begin{array}{l}
 \texttt{pd.pivot(df,}\\
 \texttt{    index="row",}\\
 \texttt{    columns="col",} \\
 \texttt{    values="val")}
 \end{array}
-$\Rightarrow$
+\Rightarrow$
 \qquad
 \begin{tabular}{lll}
 \textbf{(row)} & \textbf{x} & \textbf{y} \\ \hline
@@ -196,6 +196,17 @@ notebooks that are evaluated cell-by-cell.
 This is something I experimented with in the
 Histogram project (see \url{https://tomasp.net/histogram/#s5_2}). That is a minimalistic programming environment, so things are easier there, but it implements the idea.
 
+\paragraph{Algebra for dataframes.}
+Petersohn et al. (\url{https://arxiv.org/pdf/2001.00888.pdf}) is an interesting reference that
+can help us figure out what kind of operations we need in the type system. It defines basic
+``algebra for dataframes'' that can be used to compose more advanced dataframe operations from
+a smaller number of basic building blocks. The primitive operations include some obvious
+cases (selection, projection, union, etc.), less obvious ones (grouping, windowing operation),
+but also operations that are dataframe-specific and transform the schema dynamically (meaning
+that they most likely require something along the lines of refinement as discussed above) such
+as transposition and operations that turn column/row data into column/row labels. Notably,
+the algebra does not include ``pivot'' but this can be expressed in terms of the other operations
+(Figure 6 in the paper).
 
 \section{Remarks}
 If we want a realistic implementation, can it be done as an extension of mypy (\url{https://mypy-lang.org}) and possibly using standard Python type annotations in some way?
