@@ -43,3 +43,22 @@
   - automatic renaming for columns which are present in both data frames but aren't join on, `suffixes=` param
   - `concat` is very generic and also very annoying
     * Basic use case seems fairly reasonable though, only gets bad with `keys` creating hierarchical indices or when merging series column-wise
+* Grouping
+  - `groupby` can also be given a series, not sure if there are any useful use cases that aren't just `df.groupby(df['key'])`
+    * if we want to support this, the series type needs to keep track of the series name
+  - giving it a list of series or column names creates a hierarchical index
+  - `mean` and non-numeric columns (and `numeric_only` param)
+  - `size` vs `count`, we don't really have to care about the contents but `count` creates more columns
+  - do we want to handle grouping on different axes?
+    * possibly also with a dictionary mapping
+  - functional parameters, i.e. `groupby(len)`
+  - which aggregation functions do we want to support?
+    * the standard ones should be simple enough (`any`, `all`, `count`, `cummin`, `cummax`, `cumsum`, `first`, `last`, `mean`, `median`, `min`, `max`, `size`, `sum`, `std`, `var`)
+    * series methods? like `nsmallest` (creates hierarchical indices)
+    * custom functions?
+    * note that the standard agg functions can also be given like `agg('mean')` or `agg(['mean','sum'])` (the latter creates a hierarchical index)
+    * renaming with a list of tuples or a dictionary... or a combination thereof `agg({'col1':['mean','sum'], 'col2':'max'})`
+  - the `groupby` object supports indexing
+    * `df.groupby('col1')['col2']`, basically the same as doing `df['col2'].groupby(df['col1'])` - note that groupby needs to be given a series, as that column no longer exists on the data frame it's called on
+    * internal representation of the groupby object type will have to take this into account
+  - `pivot_tables` as a combination of `groupby` and reshaping?
