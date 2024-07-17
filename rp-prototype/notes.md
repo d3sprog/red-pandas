@@ -62,3 +62,9 @@
     * `df.groupby('col1')['col2']`, basically the same as doing `df['col2'].groupby(df['col1'])` - note that groupby needs to be given a series, as that column no longer exists on the data frame it's called on
     * internal representation of the groupby object type will have to take this into account
   - `pivot_tables` as a combination of `groupby` and reshaping?
+
+# Architecture
+
+* Probably easier if we call it from our custom jupyter kernel
+  - Could be entirely static (give it remaining code, types of locals and let it typecheck)
+  - Could also be doing the type checking incrementally, with input provided piece by piece as cells are evaluated
