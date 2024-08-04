@@ -4,6 +4,12 @@ module Types
     ( Var
     , Info(..)
     , Wildcard(..)
+    , RPIndex(..)
+    , RPSeries(..)
+    , RPDataFrame(..)
+    , RPLocInfo(..)
+    , RPGroupBy(..)
+    , RPTypeBase(..)
     , RPType(..)
     , RPCompType(..)
     , RPExpr(..)
@@ -23,12 +29,72 @@ data Wildcard a
     | Partial a  -- ^ The collection contains at least the given values
     deriving (Show)
 
--- | Types
+-- TODO: Type of index elements seem far less useful, but maybe should be
+-- tracked as well?
+
+-- | Pandas indices
+data RPIndex t
+    = RPIndex
+    { ixName :: t  -- ^ Index name
+    , ixUnique :: t  -- ^ Are the values unique?
+    }
+    deriving (Show)
+
+-- | Pandas series
+data RPSeries t
+    = RPSeries
+    { srName :: t  -- ^ Series name
+    , srIndex :: t  -- ^ Series index
+    , srUnique :: t  -- ^ Are the values unique?
+    , srType :: t  -- ^ Type of the elements
+    }
+    deriving (Show)
+
+-- | Pandas data frame
+data RPDataFrame t
+    = RPDataFrame
+    { dfName :: t  -- ^ Data frame name
+    , dfRowIndex :: t  -- ^ Row index
+    , dfColIndex :: t  -- ^ Column index
+    , dfColInfo :: Wildcard [(t, t)]  -- ^ Names and types of columns
+    }
+    deriving (Show)
+
+-- TODO: __dict__ gives an empty result on the loc/iloc objects, but according to the
+-- source code for the base class (https://github.com/pandas-dev/pandas/blob/main/pandas/_libs/indexing.pyi),
+-- the only relevant information is the "name" (in our case loc/iloc) and the source object.
+
+-- | Pandas indexer
+data RPLocInfo t
+    = RPLocInfo
+    { liSource :: t  -- ^ Source object
+    , liNumeric :: Bool  -- ^ Is this an iloc indexer?
+    }
+    deriving (Show)
+
+-- TODO: The pandas groupby object contains (at least) the following:
 --
--- As an example, the dictionary @{\'a\':5, \'b\':6}@ would be represented as:
+-- >>> df.groupby('a').__dict__
+-- {'_selection': None, 'level': None, 'as_index': True, 'keys': 'a', 'sort': True,
+-- 'group_keys': True, 'dropna': True, 'observed': False, 'obj': <dataframe>, 'axis': 0,
+-- '_grouper': <basegrouper>, 'exclusions': frozenset({'a'})}
 --
--- > TyDict (Exact [(TyStr (Exact "a"), TyInt (Exact 5)), (TyStr (Exact "b"), TyInt (Exact 6))])
-data RPType
+-- We'll need to pick a reasonable subset of these to be able to type check common uses.
+
+-- | Pandas GroupBy object
+data RPGroupBy t
+    = RPGroupBy
+    { gbSource :: t  -- ^ Source object
+    , gbKeys :: t  -- ^ Keys to group on
+    }
+    deriving (Show)
+
+-- TODO: Do we want to track more precise information about the slices?
+
+-- | Base, non-recursive type for red-pandas types.
+--
+-- Parametrized by the type of subterms.
+data RPTypeBase t
     = TyAny  -- ^ Unknown type
 
     | TyStr (Info String)  -- ^ Strings
@@ -36,26 +102,22 @@ data RPType
     | TyFloat (Info Double)  -- ^ Floating point numbers
     | TyBool (Info Bool)  -- ^ Booleans
 
-    | TyList (Wildcard [RPType])  -- ^ Lists or tuples
-    -- TODO: might be a good idea to define some ordering on RPType
-    -- and use an actual Data.Set type; same for dictionaries
-    -- Sets might also just not be necessary
-    | TySet (Wildcard [RPType])  -- ^ Sets
-    | TyDict (Wildcard [(RPType, RPType)])  -- ^ Dictionaries
+    | TySlice  -- ^ Slice object
+    | TyList (Wildcard [t])  -- ^ Lists or tuples
+    | TyDict (Wildcard [(t, t)])  -- ^ Dictionaries
 
     -- TODO: We probably need to support (at least simple) lambdas, not
     -- sure if TyFun is sufficient for all the use cases we might run into
-    | TyFun RPType RPType  -- ^ Function types
+    | TyFun t t  -- ^ Function types
 
-    -- TODO: As mentioned in the notes, we need to decide which kinds of operations
-    -- we want to support; these will be really complex if we want to support
-    -- everything
-    | TySeries RPType RPType  -- ^ Pandas series, with its name and the element type
-    | TyDataFrame (Wildcard [(RPType, RPType)])  -- ^ Pandas data frame, with column "names"
-                                                 -- (typically singleton types) and the element types
-    | TyGroupBy  -- ^ Pandas groupby object
+    | TyIndex (RPIndex t)  -- ^ Indices
+    | TySeries (RPSeries t)  -- ^ Series
+    | TyDataFrame (RPDataFrame t)  -- ^ Data frames
+    | TyLocInfo (RPLocInfo t)  -- ^ Indexers
+    | TyGroupBy (RPGroupBy t)  -- ^ GroupBy objects
+    deriving (Show)
 
-    -- TODO: (Multi)indices as a separate type?
+newtype RPType = RPT { unRPT :: RPTypeBase RPType }
     deriving (Show)
 
 -- Much like in the paper, comp types will likely be treated separately
@@ -70,33 +132,58 @@ data RPCompType
 data RPExpr
     = Var Var  -- ^ Variables
     | Let Var RPExpr RPExpr  -- ^ Let expression
-
-    -- TODO: This works fine-ish but is pretty inelegant,
-    -- probably want to parametrize RPType so that we can
-    -- replace this with (RPTypeBase RPExpr) or some such.
-    --
-    -- As it is, we can easily create a dictionary Dict['a':5] but
-    -- once variables are involved, e.g. Dict['a':x], we have to do annoying
-    -- detours such as Insert ('a',x) Dict[]
-    | Const RPType  -- ^ Type constants
+    | TypeExpr (RPTypeBase RPExpr)  -- ^ Type expressions
 
     | If RPExpr RPExpr RPExpr  -- ^ If-then-else
     | And RPExpr RPExpr  -- ^ Boolean conjunction
     | Or RPExpr RPExpr  -- ^ Boolean disjunction
     | Not RPExpr  -- ^ Boolean negation
 
+    -- TODO: maybe allow dynamic construction of the error message?
+    | Fail String  -- ^ Failure
+
     -- TODO: are there any use cases for other comparison operators?
     | EqComp RPExpr RPExpr  -- ^ Equality comparison
     | NeqComp RPExpr RPExpr  -- ^ Inequality comparison
+
+    | Dot RPExpr String  -- ^ Attribute access
 
     -- Collection manipulation, these should also be usable with pandas types,
     -- i.e. checking that a data frame contains a column with particular name
     -- TODO: will need some adjustments if we want to support multiindices
     -- and maybe some convenience operations like unions or such
-    | Contains RPExpr RPExpr  -- ^ Membership testing
+    | In RPExpr RPExpr  -- ^ Membership testing
     | At RPExpr RPExpr  -- ^ Element access
     | Insert RPExpr RPExpr  -- ^ Insertion
     | Delete RPExpr RPExpr  -- ^ Deletion
 
     -- TODO: Probably some string and numeric operations as well
     deriving (Show)
+
+-- Here's how a simple, single-dimensional element access comp type might
+-- look like (in yet to be defined language for the above).
+--
+-- ix <: Any / Any ->  # If an object requires a particular index type,
+--                     # we could check for it here. Not super useful for
+--                     # series/dataframes as the names can be anything hashable.
+-- (
+--   if (tself.type_str == "series" or tself.type_str == "data_frame") and ix.type_str in ["dict", "loc_info", "group_by"] then
+--     fail "can't index with that"  # Series and data frames don't allow these as indices
+--   else if tself.type_str == "series" then
+--     if tself.index.unique and ix.is_simple then
+--       tself.type
+--     else  # Access into non-unique series can return either a scalar or another series.
+--       Any
+--   else if tself.type_str == "dataframe" then
+--     if tself.col_index.unique and ix.is_simple and ix.is_known then  # Unique column names and a known value as an index
+--       if ix in tself.col_info then  # Known column, return a series with that type
+--         Series(name=ix, index=tself.row_index, unique=Bool, type=tself.col_info[ix])
+--       else if tself.col_info.is_exact then  # Column wasn't found and column info has exact information
+--         fail "column doesn't exist"
+--       else
+--         Any
+--     else  # Optionally, handle slices, indices, series and data frames here
+--       Any
+--   else  # Optionally, handle lists and dictionaries here
+--     Any
+-- ) / Any
