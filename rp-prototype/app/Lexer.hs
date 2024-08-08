@@ -6,9 +6,12 @@ module Lexer
     , braces
     , brackets
     , semi
+    , comma
     , integer
     , float
     , identifier
+    , reservedKeywords
+    , reservedStructs
     , reserved
     , reservedOp
     , stringLiteral
@@ -54,25 +57,42 @@ brackets = between (symbol "[") (symbol "]")
 semi :: Parser String
 semi = symbol ";"
 
--- | Parse an integer (without a sign).
-integer :: Parser Integer
-integer = lexeme L.decimal
+-- | Parse a comma.
+comma :: Parser String
+comma = symbol ","
 
--- | Parse a floating point number (without a sign).
+-- | Parse an integer.
+integer :: Parser Integer
+integer = L.signed space $ lexeme num
+  where
+    num =  string "0x" *> L.hexadecimal
+       <|> string "0o" *> L.octal
+       <|> string "0b" *> L.binary
+       <|> L.decimal
+
+-- | Parse a floating point number.
 float :: Parser Double
-float = lexeme L.float
+float = L.signed space $ lexeme L.float
 
 -- | List of reserved keywords.
+reservedKeywords :: [String]
+reservedKeywords = ["if", "then", "else", "let", "in", "and", "or", "not"]
+
+-- | List of reserved structure names.
+reservedStructs :: [String]
+reservedStructs = ["Index", "Series", "DataFrame", "Loc", "ILoc", "GroupBy"]
+
+-- | List of reserved names.
 reservedNames :: [String]
-reservedNames = ["if", "then", "else", "let", "in", "and", "or", "not"]
+reservedNames = reservedKeywords ++ reservedStructs
 
 -- | Parse the first character of an identifier.
 startIdentChar :: Parser Char
-startIdentChar = letterChar
+startIdentChar = letterChar <|> char '_'
 
 -- | Parse a character of an identifier.
 identChar :: Parser Char
-identChar = alphaNumChar
+identChar = alphaNumChar <|> char '_'
 
 -- | Parse a character of an operator.
 opChar :: Parser Char
@@ -96,6 +116,6 @@ reservedOp name = (lexeme . try) (string name *> notFollowedBy opChar) <?> "oper
 -- TODO: add escapes, potentially allow single quote strings?
 -- | Parse a string literal.
 stringLiteral :: Parser String
-stringLiteral = between (char '"') (char '"') (many stringChar)
+stringLiteral = lexeme $ between (char '"') (char '"') (many stringChar)
   where
     stringChar = satisfy (\c -> c /= '"' && c > '\026')  -- Taken from Text.Parsec.Token

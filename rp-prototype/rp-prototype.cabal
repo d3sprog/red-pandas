@@ -73,7 +73,8 @@ executable rp-prototype
     -- Other library packages from which modules are imported.
     build-depends:    base >=4.20.0.0,
                       megaparsec >=9.0.0,
-                      parser-combinators >=1.0.0
+                      parser-combinators >=1.0.0,
+                      mtl >=2.3.0
 
     -- Directories containing source files.
     hs-source-dirs:   app

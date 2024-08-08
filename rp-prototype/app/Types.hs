@@ -56,7 +56,7 @@ data RPDataFrame t
     { dfName :: t  -- ^ Data frame name
     , dfRowIndex :: t  -- ^ Row index
     , dfColIndex :: t  -- ^ Column index
-    , dfColInfo :: Wildcard [(t, t)]  -- ^ Names and types of columns
+    , dfColInfo :: t  -- ^ Names and types of columns
     }
     deriving (Show)
 
