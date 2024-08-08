@@ -76,7 +76,10 @@ float = L.signed space $ lexeme L.float
 
 -- | List of reserved keywords.
 reservedKeywords :: [String]
-reservedKeywords = ["if", "then", "else", "let", "in", "and", "or", "not"]
+reservedKeywords =
+    [ "if", "then", "else", "let", "in", "and", "or", "not"
+    , "False", "True", "Any", "Str", "Int", "Float", "Bool", "Slice"
+    ]
 
 -- | List of reserved structure names.
 reservedStructs :: [String]

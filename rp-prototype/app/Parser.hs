@@ -1,6 +1,6 @@
 module Parser
     ( expr
-    , typeConstant
+    , type_
     ) where
 
 import Control.Arrow
@@ -17,7 +17,7 @@ import Types
 rawStruct :: Parser e -> Parser (String, [(Var, e)])
 rawStruct e = (,) <$> choice (map symbol reservedStructs) <*> parens (field `sepBy` comma) <?> "struct"
   where
-    field = (,) <$> identifier <* reservedOp "=" <*> e <?> "field"
+    field = (,) <$> (identifier <?> "field name") <* reservedOp "=" <*> (e <?> "field value")
 
 -- TODO: report the location at the beginning (rather than at the end)
 struct :: Parser e -> Parser (RPTypeBase e)
@@ -75,20 +75,33 @@ number = TyFloat . Known <$> try float <|> TyInt . Known <$> integer
 string :: Parser (RPTypeBase e)
 string = TyStr . Known <$> stringLiteral
 
+bool :: Parser (RPTypeBase e)
+bool = TyBool (Known False) <$ reserved "False" <|> TyBool (Known True) <$ reserved "True"
+
+unknown :: Parser (RPTypeBase e)
+unknown =  TyAny           <$ reserved "Any"
+       <|> TyStr   Unknown <$ reserved "Str"
+       <|> TyInt   Unknown <$ reserved "Int"
+       <|> TyFloat Unknown <$ reserved "Float"
+       <|> TyBool  Unknown <$ reserved "Bool"
+       <|> TySlice         <$ reserved "Slice"
+
 typeBase :: Parser e -> Parser (RPTypeBase e)
 typeBase e =  struct e
           <|> list e
           <|> dict e
-          <|> number
           <|> string
-          -- TODO: more
+          <|> number
+          <|> bool
+          <|> unknown
+          -- TODO: function type
 
 factor :: Parser RPExpr
 factor =  parens expr
       <|> Var <$> identifier
-      <|> If <$> (reserved "if" *> expr) <* reserved "then" <*> expr <* reserved "else" <*> expr
       <|> Let <$> (reserved "let" *> identifier) <* reservedOp "=" <*> expr <* semi <*> expr
       <|> TypeExpr <$> typeBase expr
+      <|> If <$> (reserved "if" *> expr) <* reserved "then" <*> expr <* reserved "else" <*> expr
 
 exprSpecial :: Parser RPExpr
 exprSpecial = factor >>= go
@@ -103,12 +116,15 @@ exprSpecial = factor >>= go
 
 expr :: Parser RPExpr
 expr = makeExprParser exprSpecial
-    [ [InfixN (In <$ reserved "in")]
+    [ [InfixL (Difference <$ reservedOp "\\")]
+    , [InfixL (Intersection <$ reservedOp "&")]
+    , [InfixL (Union <$ reservedOp "|")]
+    , [InfixN (In <$ reserved "in")]
     , [InfixN (EqComp <$ reservedOp "=="), InfixN (NeqComp <$ reservedOp "!=")]
     , [Prefix (Not <$ reserved "not")]
     , [InfixR (And <$ reserved "and")]
     , [InfixR (Or <$ reserved "or")]
     ] <?> "expression"
 
-typeConstant :: Parser RPType
-typeConstant = RPT <$> typeBase typeConstant
+type_ :: Parser RPType
+type_ = RPT <$> typeBase type_

@@ -154,8 +154,9 @@ data RPExpr
     -- and maybe some convenience operations like unions or such
     | In RPExpr RPExpr  -- ^ Membership testing
     | At RPExpr RPExpr  -- ^ Element access
-    | Insert RPExpr RPExpr  -- ^ Insertion
-    | Delete RPExpr RPExpr  -- ^ Deletion
+    | Union RPExpr RPExpr  -- ^ Collection union
+    | Intersection RPExpr RPExpr  -- ^ Collection intersection
+    | Difference RPExpr RPExpr  -- ^ Collection difference
 
     -- TODO: Probably some string and numeric operations as well
     deriving (Show)
