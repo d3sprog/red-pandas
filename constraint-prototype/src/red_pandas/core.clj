@@ -21,7 +21,8 @@
   (python "$d.type_str == data_frame"))
 
 (defprotocol Unifiable
-  (unify-self [self other substitution]))
+  (unify-self [self other substitution])
+  (replace-self [self substitution]))
 
 (defn unifiable? [term]
   (satisfies? Unifiable term))
@@ -46,7 +47,11 @@
   (unify-self [self other substitution]
     (contains? substitution self) (unify (get substitution self) other substitution)
     (contains? substitution other) (unify self (get substitution other) substitution)
-    :else (assoc substitution self other)))
+    :else (assoc substitution self other))
+  (replace-self [self substitution]
+    (if-let [v (get substitution self)]
+      v
+      self)))
 
 (defmethod print-method Fresh-Variable [v ^java.io.Writer w]
   (.write w (.name v)))
@@ -55,7 +60,6 @@
   Unifiable
   (unify-self [self other substitution]
     nil))
-
 
 (declare same-predicate?)
 
@@ -72,7 +76,10 @@
                          (throw (ex-info "Ununifiable" {})))) substitution))
         nil)
       (catch clojure.lang.ExceptionInfo _
-        nil))))
+        nil)))
+  (replace-self [_ substitution]
+    (Predicate. name (map #(replace-self % substitution) variables))))
+
 (defmethod print-method Predicate [p ^java.io.Writer w]
   (.write w (str (.name p) "("
                  (str/join ", " (map print-str (.variables p))) ")")))
@@ -110,6 +117,18 @@
                 nil)))
        (filter identity)))
 
+(defn transitive-get [substitution key]
+  (if-let [value (get substitution key)]
+    (if (variable? value)
+      (recur substitution value)
+      value)
+    nil))
+(defn cleanup-substitution [substitution]
+  (->> substitution
+       (keys)
+       (map (fn [key] [key (transitive-get substitution key)]))
+       (into {})))
+
 (defn resolve-goals
   ([goal rules] (resolve-goals [goal] rules {}))
   ([initial-goals rules initial-substitution]
@@ -124,7 +143,11 @@
            (let [resolved (resolve-goal goals rules substitution)]
              #_(println "resolved" resolved (concat new-stack resolved))
              (recur (concat new-stack resolved) results))))
-       results))))
+       (map cleanup-substitution results)))))
+
+(defn resolve-pretty [goal rules]
+  (->> (resolve-goals goal rules)
+       (map #(replace-self goal %))))
 
 (defmacro fresh
   "Recieves a list of symbols to bind as fresh variables and a body"
@@ -148,10 +171,7 @@
                (pred :mother x y)])])
 (def query (fresh [a b] (pred :parent a b)))
 
-(resolve-goals query rules)
-
-(def thread-count 8)
-
+(resolve-pretty query rules)
 
 ;; rule: name(vars), [goals(vars)...]
 ;; goal: vals
