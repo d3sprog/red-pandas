@@ -37,7 +37,9 @@
         (if-let [subst (and (unifiable? term2)
                             (unify-self term2 term1 substitution))]
           subst
-          nil)))))
+          (do
+            #_(println "Failed unifying:" term1 term2 "with subst:" substitution)
+            nil))))))
 
 (deftype Fresh-Variable [name]
   Unifiable
@@ -71,6 +73,9 @@
         nil)
       (catch clojure.lang.ExceptionInfo _
         nil))))
+(defmethod print-method Predicate [p ^java.io.Writer w]
+  (.write w (str (.name p) "("
+                 (str/join ", " (map print-str (.variables p))) ")")))
 
 (defn same-predicate? [p1 p2]
   (and (instance? Predicate p2)
@@ -92,58 +97,58 @@
     (vector? goal) (mapv #(substitute % substitution) goal)
     :else goal))
 
-(defn substitution-closure [substitution]
-  )
+(defn resolve-goal [[goal & rest-goals] rules substitution]
+  #_(println "resolving" goal "\nwith rules:" rules "\nin substitution:" substitution)
+  (->> rules
+       (map (fn [[head & body]]
+              #_(println "unifying:" goal "with" head)
+              (if-let [sub (unify goal head substitution)]
+                (do
+                  #_(println "got sub:" sub)
+                  [(concat (map #(substitute % sub) body)
+                           rest-goals) sub]) 
+                nil)))
+       (filter identity)))
 
 (defn resolve-goals
-  ([goal facts rules] (resolve-goals [goal] facts rules {}))
-  ([initial-goals facts rules initial-substitution]
-   (let [stack (atom [[initial-goals initial-substitution]])
-         results (atom [])]
-     (while (seq @stack)
-       (let [[[goals substitution] & new-stack] @stack]
-         (reset! stack new-stack)
+  ([goal rules] (resolve-goals [goal] rules {}))
+  ([initial-goals rules initial-substitution]
+   (loop [stack [[initial-goals initial-substitution]]
+          results []]
+     #_(println "stack:" stack)
+     (if-not (empty? stack)
+       (let [[[goals substitution] & new-stack] stack]
+         #_(println "solving goals:" goals)
          (if (empty? goals)
-           (swap! results conj substitution)
-           (let [[first-goal & rest-goals] goals]
-             (doseq [fact facts]
-               (when-let [sub (unify first-goal fact substitution)]
-                 (swap! stack conj [rest-goals sub])))
-             (doseq [rule rules]
-               (let [[head & body] rule
-                     sub (unify first-goal head substitution)]
-                 (when sub
-                   (swap! stack conj [(-> (map #(substitute % sub) body)
-                                          (concat rest-goals)) sub]))))))))
-     @results)))
+           (recur new-stack (conj results substitution))
+           (let [resolved (resolve-goal goals rules substitution)]
+             #_(println "resolved" resolved (concat new-stack resolved))
+             (recur (concat new-stack resolved) results))))
+       results))))
 
 (defmacro fresh
   "Recieves a list of symbols to bind as fresh variables and a body"
   [fresh-vars & body]
   (let [var-binds (mapcat (fn [fresh-var] [fresh-var `(Fresh-Variable. (str "?" '~fresh-var))]) fresh-vars)]
     `(let [~@var-binds]
-       ~@body))
-  ;; (let [var-binds (mapcat (fn [fresh-var] [fresh-var `(Fresh-Variable. (str ~fresh-var))]) fresh-vars)]
-  ;;   `(let [~@var-binds]
-  ;;      ~@body))
-  )
+       ~@body)))
 
 (defn pred [name & params]
   (Predicate. name params))
 
-(def facts [(pred :father :john :mary)
-            (pred :father :john :alice)
-            (pred :mother :susan :mary)
-            (pred :mother :susan :alice)])
-(def rules [(fresh [x y]
+(def rules [[(pred :father :john :mary)]
+            [(pred :father :john :alice)]
+            [(pred :mother :susan :mary)]
+            [(pred :mother :susan :alice)]
+            (fresh [x y]
               [(pred :parent x y)
                (pred :father x y)])
             (fresh [x y]
               [(pred :parent x y)
                (pred :mother x y)])])
-(def query (fresh [a b] (pred :father a b)))
+(def query (fresh [a b] (pred :parent a b)))
 
-(resolve-goals query facts rules)
+(resolve-goals query rules)
 
 (def thread-count 8)
 
