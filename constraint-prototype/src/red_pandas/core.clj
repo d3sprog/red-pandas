@@ -80,6 +80,9 @@
   (replace-self [_ substitution]
     (Predicate. name (map #(replace-self % substitution) variables))))
 
+(defn predicate? [p]
+  (instance? Predicate p))
+
 (defmethod print-method Predicate [p ^java.io.Writer w]
   (.write w (str (.name p) "("
                  (str/join ", " (map print-str (.variables p))) ")")))
@@ -101,7 +104,7 @@
   (assert (map? substitution))
   (cond
     (variable? goal) (get substitution goal goal)
-    (vector? goal) (mapv #(substitute % substitution) goal)
+    (predicate? goal) (Predicate. (substitute (.name goal) substitution) (map #(substitute % substitution) (.variables goal)))
     :else goal))
 
 (defn resolve-goal [[goal & rest-goals] rules substitution]
