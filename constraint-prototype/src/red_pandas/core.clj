@@ -5,24 +5,12 @@
 ;;            [clojure.core.async.impl.protocols]
             [clojure.string :as str]
 ;;            [clojure.core.async.impl.protocols :as impl]
-  )
-)
-
-(deftype Python-Predicate [variables template])
-
-(defn python [str]
-  (let [variables (->> str
-                       (re-seq #"\$(\w+)")
-                       (map second)
-                       (map symbol))]
-    (Python-Predicate. variables str)))
-
-(defn DataFrame [d]
-  (python "$d.type_str == data_frame"))
+            [red-pandas.UnificationException])
+  (:import red_pandas.UnificationException))
 
 (defprotocol Unifiable
   (unify-self [self other substitution])
-  (replace-self [self substitution]))
+  (substitute-self [self substitution]))
 
 (defn unifiable? [term]
   (satisfies? Unifiable term))
@@ -42,43 +30,80 @@
             #_(println "Failed unifying:" term1 term2 "with subst:" substitution)
             nil))))))
 
+(defn substitute [goal substitution]
+  (if (unifiable? goal)
+    (substitute-self goal substitution)
+    goal))
+
 (deftype Fresh-Variable [name]
   Unifiable
   (unify-self [self other substitution]
     (contains? substitution self) (unify (get substitution self) other substitution)
     (contains? substitution other) (unify self (get substitution other) substitution)
     :else (assoc substitution self other))
-  (replace-self [self substitution]
-    (if-let [v (get substitution self)]
-      v
-      self)))
+  (substitute-self [self substitution]
+    (get substitution self self)))
 
 (defmethod print-method Fresh-Variable [v ^java.io.Writer w]
   (.write w (.name v)))
 
+;; Variable that has in-python equivalent
 (deftype Python-Variable [facts]
   Unifiable
   (unify-self [self other substitution]
     nil))
 
-(declare same-predicate?)
+;; Variable that does not exist in python, and cannot be unified with python predicates.
+(deftype Pseudo-Variable [name]
+  Unifiable
+  )
+
+(deftype Python-Predicate [variables template]
+  Unifiable
+  (unify-self [self other substitution]
+    (if (and (instance? Python-Predicate other)
+             (= (.template self) (.template other)))
+      (->>
+       (map vector (.variables self) (.variables other))
+       (reduce (fn [subst [var1 var2]]
+                 (if-let [new-subst (unify var1 var2 subst)]
+                   new-subst
+                   (throw (UnificationException. "variable fail predicate")))) substitution))))
+  (substitute-self [_ substitution]
+    (let [subst-vars (map #(substitute % substitution) variables)]
+      (when (some #(instance? Pseudo-Variable %) subst-vars)
+        (throw (UnificationException. "python pred pseudo")))
+      (if (every? #(instance? Python-Variable %) subst-vars)
+        (assert false "Unimplemented call python")
+        (Python-Predicate. subst-vars template)))))
+
+(defn python [str]
+  (let [variables (->> str
+                       (re-seq #"\$(\w+)")
+                       (map second)
+                       (map #(Fresh-Variable. %)))]
+    (Python-Predicate. variables str)))
+
+(defn DataFrame [d]
+  (python "$d.type_str == data_frame"))
+
 
 (deftype Predicate [name variables]
   Unifiable
   (unify-self [self other substitution]
-    (try
-      (if (same-predicate? self other)
-        (->> (map vector (.variables self) (.variables other))
-             (reduce (fn [subst [var1 var2]]
-                       (assert (map? subst))
-                       (if-let [new-subst (unify var1 var2 subst)]
-                         new-subst
-                         (throw (ex-info "Ununifiable" {})))) substitution))
-        nil)
-      (catch clojure.lang.ExceptionInfo _
-        nil)))
-  (replace-self [_ substitution]
-    (Predicate. name (map #(replace-self % substitution) variables))))
+    (if (and (instance? Predicate other)
+             (== (count (.variables self)) (count (.variables other))))
+      (->> (map vector (.variables self) (.variables other))
+           (concat [[(.name self) (.name other)]])
+           (reduce (fn [subst [var1 var2]]
+                     (assert (map? subst))
+                     (if-let [new-subst (unify var1 var2 subst)]
+                       new-subst
+                       (throw (UnificationException. (str "predicate unif fail" var1 var2))))) substitution))
+      (throw (UnificationException. "cannot unify predicate with other")))
+    )
+  (substitute-self [_ substitution]
+    (Predicate. (substitute name substitution) (map #(substitute % substitution) variables))))
 
 (defn predicate? [p]
   (instance? Predicate p))
@@ -87,38 +112,25 @@
   (.write w (str (.name p) "("
                  (str/join ", " (map print-str (.variables p))) ")")))
 
-(defn same-predicate? [p1 p2]
-  (and (instance? Predicate p2)
-       (= (.name p1) (.name p2))
-       (== (-> p1
-               (.variables)
-               (count))
-           (-> p2
-               (.variables)
-               (count)))))
-
 (defn variable? [v]
   (instance? Fresh-Variable v))
 
-(defn substitute [goal substitution]
-  (assert (map? substitution))
-  (cond
-    (variable? goal) (get substitution goal goal)
-    (predicate? goal) (Predicate. (substitute (.name goal) substitution) (map #(substitute % substitution) (.variables goal)))
-    :else goal))
-
-(defn resolve-goal [[goal & rest-goals] rules substitution]
+(defn resolve-goal
+  "Returns list of substitutions"
+  [[goal & rest-goals] rules substitution]
   #_(println "resolving" goal "\nwith rules:" rules "\nin substitution:" substitution)
-  (->> rules
-       (map (fn [[head & body]]
-              #_(println "unifying:" goal "with" head)
-              (if-let [sub (unify goal head substitution)]
-                (do
-                  #_(println "got sub:" sub)
+  (try 
+    (->> rules
+         (map (fn [[head & body]]
+                #_(println "unifying:" goal "with" head)
+                (if-let [sub (unify goal head substitution)]
                   [(concat (map #(substitute % sub) body)
-                           rest-goals) sub]) 
-                nil)))
-       (filter identity)))
+                           rest-goals) sub] 
+                  nil)))
+         (filter identity)
+         (doall))
+    (catch UnificationException _
+      [])))
 
 (defn transitive-get [substitution key]
   (if-let [value (get substitution key)]
@@ -137,20 +149,16 @@
   ([initial-goals rules initial-substitution]
    (loop [stack [[initial-goals initial-substitution]]
           results []]
-     #_(println "stack:" stack)
      (if-not (empty? stack)
        (let [[[goals substitution] & new-stack] stack]
-         #_(println "solving goals:" goals)
-         (if (empty? goals)
-           (recur new-stack (conj results substitution))
-           (let [resolved (resolve-goal goals rules substitution)]
-             #_(println "resolved" resolved (concat new-stack resolved))
-             (recur (concat new-stack resolved) results))))
+         (if-not (empty? goals)
+           (recur (concat new-stack (resolve-goal goals rules substitution)) results)
+           (recur new-stack (conj results substitution))))
        (map cleanup-substitution results)))))
 
 (defn resolve-pretty [goal rules]
   (->> (resolve-goals goal rules)
-       (map #(replace-self goal %))))
+       (map #(substitute goal %))))
 
 (defmacro fresh
   "Recieves a list of symbols to bind as fresh variables and a body"
@@ -172,7 +180,7 @@
             (fresh [x y]
               [(pred :parent x y)
                (pred :mother x y)])])
-(def query (fresh [a b] (pred :parent a b)))
+(def query (fresh [a b x] (pred x a b)))
 
 (resolve-pretty query rules)
 
