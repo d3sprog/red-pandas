@@ -13,6 +13,7 @@
             packages = with pkgs; [
               clojure
               clojure-lsp
+              rlwrap
             ];
           };
         }
