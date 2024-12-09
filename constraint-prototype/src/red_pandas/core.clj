@@ -1,11 +1,8 @@
 (ns red-pandas.core
   (:require
-;;   [clojure.core.logic :as logic]
-;;            [clojure.core.async :as a]
-;;            [clojure.core.async.impl.protocols]
-            [clojure.string :as str]
-;;            [clojure.core.async.impl.protocols :as impl]
-            [red-pandas.UnificationException])
+   [clojure.string :as str]
+   [tapestry.core :as tap]
+   [red-pandas.UnificationException])
   (:import red_pandas.UnificationException))
 
 (defprotocol Unifiable
@@ -118,11 +115,9 @@
 (defn resolve-goal
   "Returns list of substitutions"
   [[goal & rest-goals] rules substitution]
-  #_(println "resolving" goal "\nwith rules:" rules "\nin substitution:" substitution)
   (try 
     (->> rules
          (map (fn [[head & body]]
-                #_(println "unifying:" goal "with" head)
                 (if-let [sub (unify goal head substitution)]
                   [(concat (map #(substitute % sub) body)
                            rest-goals) sub] 
@@ -156,8 +151,28 @@
            (recur new-stack (conj results substitution))))
        (map cleanup-substitution results)))))
 
-(defn resolve-pretty [goal rules]
-  (->> (resolve-goals goal rules)
+(defn resolve-goals-parallel
+  ([goal rules] (resolve-goals-parallel [goal] rules {}))
+  ([initial-goals rules initial-substitution]
+   (let [stack (atom [[initial-goals initial-substitution]])
+         results (atom [])
+         tasks (atom [])]
+     (while (or (seq @stack) (seq (swap! tasks (partial filter tap/alive?))))
+       (let [[old _new] (swap-vals! stack rest)]
+         (when (seq old)
+           (let [[[goals substitution] & _] old]
+             (if-not (empty? goals)
+               (swap! tasks conj
+                      (tap/fiber
+                        (swap! stack concat (resolve-goal goals rules substitution))))
+               (swap! results conj substitution))))))
+     @results)))
+
+(defn resolve-pretty [goal rules & {:keys [parallel?]
+                                    :or {parallel? false}}]
+  (->> (if parallel?
+         (resolve-goals-parallel goal rules)
+         (resolve-goals goal rules))
        (map #(substitute goal %))))
 
 (defmacro fresh
@@ -182,7 +197,7 @@
                (pred :mother x y)])])
 (def query (fresh [a b x] (pred x a b)))
 
-(resolve-pretty query rules)
+(resolve-pretty query rules :parallel? true)
 
 ;; rule: name(vars), [goals(vars)...]
 ;; goal: vals
