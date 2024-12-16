@@ -24,19 +24,14 @@
        (reduce (fn [subst [var1 var2]]
                  (if-let [new-subst (rc/unify var1 var2 subst)]
                    new-subst
-                   (throw (UnificationException. "variable fail predicate")))) substitution))
+                   (reduced nil))) substitution))
 
-      :else (throw (UnificationException. (print-str "Cannot unify with non-python predicate"
-                                                     (count (.variables self)) (count (.variables other))
-                                                     other (and (rc/predicate? other)
-                                                                                                                                                              (== (count (.variables self)) (count (.variables other)))))))))
+      :else nil))
   (substitute-self [_ substitution]
     (let [subst-vars (map #(rc/substitute % substitution) variables)]
-      (when (some #(instance? Pseudo-Variable %) subst-vars)
-        (throw (UnificationException. "python pred pseudo")))
-      (if (every? #(instance? Python-Variable %) subst-vars)
-        (assert false "Unimplemented call python")
-        (Python-Predicate. subst-vars template)))))
+      (cond (some #(instance? Pseudo-Variable %) subst-vars) nil
+            (every? #(instance? Python-Variable %) subst-vars) (assert false "Unimplemented call python")
+            :else (Python-Predicate. subst-vars template)))))
 
 (defmethod print-method Python-Predicate [p ^java.io.Writer w]
   (.write w (str "\"" (.template p) "\"" "("

@@ -1,10 +1,6 @@
 (ns red-pandas.core
   (:require
-   [clojure.string :as str]
-   [red-pandas.UnificationException]
-   [red-pandas.TypeError])
-  (:import red_pandas.UnificationException
-           red_pandas.TypeError))
+   [clojure.string :as str]))
 
 (defprotocol Unifiable
   (unify-self [self other substitution])
@@ -14,23 +10,12 @@
   (satisfies? Unifiable term))
 
 (defn unify [term1 term2 substitution]
-  (if (or (not term1) (not term2))
-    nil
-    (if (= term1 term2)
-      substitution
-      (try 
-        (if-let [subst (and (unifiable? term1)
-                            (unify-self term1 term2 substitution))]
-          subst
-          (if-let [subst (and (unifiable? term2)
-                              (unify-self term2 term1 substitution))]
-            subst
-            nil))
-        (catch UnificationException _e
-          (if-let [subst (and (unifiable? term2)
-                              (unify-self term2 term1 substitution))]
-            subst
-            nil))))))
+  (cond
+    (or (not term1) (not term2)) nil
+    (= term1 term2) substitution
+    (and (unifiable? term1) (unify-self term1 term2 substitution)) (unify-self term1 term2 substitution)
+    (and (unifiable? term2) (unify-self term2 term1 substitution)) (unify-self term2 term1 substitution)
+    :else nil))
 
 (defn substitute [goal substitution]
   (if (unifiable? goal)
@@ -63,7 +48,7 @@
            (reduce (fn [subst [var1 var2]]
                      (if-let [new-subst (unify var1 var2 subst)]
                        new-subst
-                       (throw (UnificationException. (str "predicate unif fail" var1 var2))))) substitution))
+                       (reduced nil))) substitution))
       nil))
   (substitute-self [_ substitution]
     (Predicate. (substitute name substitution) (map #(substitute % substitution) variables))))

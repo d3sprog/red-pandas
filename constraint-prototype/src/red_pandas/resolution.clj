@@ -22,6 +22,7 @@
          (filter identity)
          (doall))
     (catch UnificationException _e
+      (println "Unif failed for" goal (.toString _e))
       [])))
 
 (defn transitive-get [substitution key]
