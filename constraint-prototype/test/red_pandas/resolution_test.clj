@@ -30,6 +30,6 @@
              (rs/resolve-pretty (rs/fresh [a b] (rs/pred :mother a b)) rules))))
   
   (t/testing "mother(X, :mary)"
-    (t/is (= [:susan]
+    (t/is (= [(rs/pred :mother :susan :mary)]
              (rs/resolve-pretty (rs/fresh [a] (rs/pred :mother a :mary)) rules)))))
 (rs/resolve-pretty (rs/fresh [a] (rs/pred :mother a :mary)) rules)
