@@ -4,4 +4,14 @@
  :paths   ["src" "classes" "resources"]
  :aliases {:cider-clj
            {:extra-deps {cider/cider-nrepl {:mvn/version "0.45.0"}}
-            :main-opts  ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}}}
+            :main-opts  ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}
+           :test
+           {:extra-paths ["test"]
+            :extra-deps  {lambdaisland/kaocha {:mvn/version "1.77.1236"}}
+            :exec-fn     kaocha.runner/exec-fn
+            :exec-args   {:skip-meta :slow}}
+
+           :watch
+           {:exec-args {:watch?     true
+                        :skip-meta  :slow
+                        :fail-fast? true}}}}

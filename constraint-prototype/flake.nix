@@ -14,6 +14,7 @@
               clojure
               clojure-lsp
               rlwrap
+              unzip
             ];
           };
         }
