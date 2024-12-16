@@ -1,6 +1,9 @@
 (ns red-pandas.core
   (:require
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [red-pandas.TypeError])
+  (:import
+   [red_pandas TypeError]))
 
 (defprotocol Unifiable
   (unify-self [self other substitution])
@@ -70,3 +73,10 @@
 
 (defn predicate? [p]
   (instance? Predicate p))
+
+(defrecord Fail [message]
+  Unifiable
+  (unify-self [self other substitution]
+    (throw (TypeError. message)))
+  (substitute-self [self substitution]
+    (assert false "Unreachable")))

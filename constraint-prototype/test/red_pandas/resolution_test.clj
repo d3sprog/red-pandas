@@ -1,7 +1,12 @@
 (ns red-pandas.resolution-test
   (:require
    [red-pandas.resolution :as rs]
-   [clojure.test :as t]))
+   [red-pandas.TypeError]
+   [red-pandas.core]
+   [clojure.test :as t])
+  (:import
+   [red_pandas TypeError]
+   [red_pandas.core Fail]))
 
 (def rules [[(rs/pred :father :john :mary)]
             [(rs/pred :father :john :alice)]
@@ -31,5 +36,7 @@
   
   (t/testing "mother(X, :mary)"
     (t/is (= [(rs/pred :mother :susan :mary)]
-             (rs/resolve-pretty (rs/fresh [a] (rs/pred :mother a :mary)) rules)))))
-(rs/resolve-pretty (rs/fresh [a] (rs/pred :mother a :mary)) rules)
+             (rs/resolve-pretty (rs/fresh [a] (rs/pred :mother a :mary)) rules))))
+  (t/testing "fail"
+    (t/is (thrown-with-msg? TypeError #"test"
+                            (rs/resolve-pretty (Fail. "test") rules)))))
