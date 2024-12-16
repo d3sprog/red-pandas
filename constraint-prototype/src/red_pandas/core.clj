@@ -9,13 +9,24 @@
 (defn unifiable? [term]
   (satisfies? Unifiable term))
 
+;; courtesy of https://ask.clojure.org/index.php/12912/cond-let-macro-as-pair-for-if-let-similar-to-if-conf-pair
+(defmacro cond-let
+  [& clauses]
+  (when clauses
+    (if (next clauses)
+      (list 'if-let (first clauses)
+            (second clauses)
+            (cons 'cond-let (nnext clauses)))
+      (first clauses))))
+
 (defn unify [term1 term2 substitution]
-  (cond
-    (or (not term1) (not term2)) nil
-    (= term1 term2) substitution
-    (and (unifiable? term1) (unify-self term1 term2 substitution)) (unify-self term1 term2 substitution)
-    (and (unifiable? term2) (unify-self term2 term1 substitution)) (unify-self term2 term1 substitution)
-    :else nil))
+  (cond-let
+   [_ (or (not term1) (not term2))] nil
+   [_ (= term1 term2)] substitution
+   ;; maybe we dont want to try both if one of them fails?
+   [subst (and (unifiable? term1) (unify-self term1 term2 substitution))] subst
+   [subst (and (unifiable? term2) (unify-self term2 term1 substitution))] subst
+   nil))
 
 (defn substitute [goal substitution]
   (if (unifiable? goal)
