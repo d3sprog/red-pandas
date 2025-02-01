@@ -5,6 +5,10 @@
   (:import
    [red_pandas TypeError]))
 
+(def ^:dynamic *unification-trace*
+  "Trace all unifications"
+  false)
+
 (defprotocol Unifiable
   (unify-self [self other substitution])
   (substitute-self [self substitution]))
@@ -23,13 +27,19 @@
       (first clauses))))
 
 (defn unify [term1 term2 substitution]
-  (cond-let
-   [_ (or (not term1) (not term2))] nil
-   [_ (= term1 term2)] substitution
-   ;; maybe we dont want to try both if one of them fails?
-   [subst (and (unifiable? term1) (unify-self term1 term2 substitution))] subst
-   [subst (and (unifiable? term2) (unify-self term2 term1 substitution))] subst
-   nil))
+  (when *unification-trace*
+    (println term1 "=" term2 "--" substitution))
+  (let [res (cond-let
+                 [_ (or (not term1) (not term2))] nil
+                 [_ (= term1 term2)] substitution
+                 ;; maybe we dont want to try both if one of them fails?
+                 [subst (and (unifiable? term1) (unify-self term1 term2 substitution))] subst
+                 [subst (and (unifiable? term2) (unify-self term2 term1 substitution))] subst
+                 nil)]
+    (if res
+      (println term1 "=" term2 "--" substitution "Success")
+      (println term1 "=" term2 "--" substitution "Failed"))
+    res))
 
 (defn substitute [goal substitution]
   (if (unifiable? goal)
@@ -40,9 +50,9 @@
   Unifiable
   (unify-self [self other substitution]
     (cond 
-      (contains? substitution self)   (unify (get substitution self) other substitution)
-      (contains? substitution other)  (unify self (get substitution other) substitution )
-      :else                           (assoc substitution self other)))
+      (contains? substitution self)  (unify (get substitution self) other substitution)
+      (contains? substitution other) (unify self (get substitution other) substitution )
+      :else                          (assoc substitution self other)))
   (substitute-self [self substitution]
     (get substitution self self)))
 
@@ -65,7 +75,7 @@
                        (reduced nil))) substitution))
       nil))
   (substitute-self [_ substitution]
-    (Predicate. (substitute name substitution) (map #(substitute % substitution) variables))))
+    (Predicate. name (map #(substitute % substitution) variables))))
 
 (defmethod print-method Predicate [p ^java.io.Writer w]
   (.write w (str (.name p) "("
@@ -76,7 +86,21 @@
 
 (defrecord Fail [message]
   Unifiable
-  (unify-self [self other substitution]
+  (unify-self [_self _other _substitution]
     (throw (TypeError. message)))
-  (substitute-self [self substitution]
+  (substitute-self [_self _substitution]
     (assert false "Unreachable")))
+
+(defrecord Bail []
+  Unifiable
+  (unify-self [_self _other _substitution]
+    nil)
+  (substitute-self [_self _substitution]
+    (assert false "Unreachable")))
+
+(defrecord Succeed []
+  Unifiable
+  (unify-self [_self other _substitution]
+    other)
+  (substitute-self [self _substitution]
+    self))

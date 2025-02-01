@@ -4,26 +4,24 @@
    [red-pandas.UnificationException]
    [manifold.stream :as s]
    [tapestry.core :as tap])
-  (:import [red_pandas UnificationException]
-           [red_pandas.core
+  (:import [red_pandas.core
             Fresh-Variable
             Predicate]))
 
 (defn resolve-goal
   "Returns list of substitutions"
   [[goal & rest-goals] rules substitution]
-  (try 
-    (->> rules
-         (map (fn [[head & body]]
-                (if-let [sub (rp/unify goal head substitution)]
-                  [(concat (mapv #(rp/substitute % sub) body)
-                           rest-goals) sub] 
-                  nil)))
-         (filter identity)
-         (doall))
-    (catch UnificationException _e
-      (println "Unif failed for" goal (.toString _e))
-      [])))
+  (let [new-goals 
+        (->> rules
+             (map (fn [[head & body]]
+                    (if-let [sub (rp/unify goal head substitution)]
+                      [(concat (mapv #(rp/substitute % sub) body)
+                               rest-goals) sub] 
+                      nil)))
+             (filter identity)
+             (doall))]
+    (println "new goals" new-goals)
+    new-goals))
 
 (defn transitive-get [substitution key]
   (if-let [value (get substitution key)]
@@ -41,13 +39,16 @@
   ([goal rules] (resolve-goals [goal] rules {}))
   ([initial-goals rules initial-substitution]
    (loop [stack [[initial-goals initial-substitution]]
-          results []]
-     (if-not (empty? stack)
-       (let [[[goals substitution] & new-stack] stack]
-         (if-not (empty? goals)
-           (recur (concat new-stack (resolve-goal goals rules substitution)) results)
-           (recur new-stack (conj results substitution))))
-       (map cleanup-substitution results)))))
+          results []
+          counter 0]
+     (println "goals" stack)
+     (when (< counter 10000)
+      (if-not (empty? stack)
+        (let [[[goals substitution] & new-stack] stack]
+          (if-not (empty? goals)
+            (recur (concat new-stack (resolve-goal goals rules substitution)) results (+ 1 counter))
+            (recur new-stack (conj results substitution) (+ 1 counter))))
+        (map cleanup-substitution results))))))
 
 (defn resolve-goal-parallel [rules [goals substitution]]
   (if-not (empty? goals)
@@ -60,6 +61,7 @@
 (defn resolve-goals-parallel
   ([goal rules] (resolve-goals-parallel [goal] rules {}))
   ([initial-goals rules initial-substitution]
+   (assert false "Unimplemented")
    (let [tasks (s/stream)
          results (atom [])]
      (s/put! tasks [initial-goals initial-substitution])
