@@ -1,0 +1,8 @@
+/constraint-prototype/.direnv/
+/constraint-prototype/.lsp/
+/.scala-build/
+/.metals/
+/.lsp/
+/.clj-kondo/
+/.bsp/
+/.bloop/

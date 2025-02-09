@@ -11,9 +11,8 @@
         {
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
-              clojure
-              clojure-lsp
-              rlwrap
+              sbt
+              metals
               unzip
             ];
           };
