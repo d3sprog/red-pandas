@@ -1,20 +1,20 @@
 package red_pandas
 
-type Substitution = Map[Object, Object]
+type Substitution = Map[Any, Any]
 
 class TypeError(message: String) extends Exception(message) {}
 
 trait Unifiable {
   def unify_self(
-      other: Object,
+      other: Any,
       substitution: Substitution
   ): Option[Substitution]
-  def substitute_self(substitution: Substitution): Object
+  def substitute_self(substitution: Substitution): Any
 }
 
 def unify(
-    a: Object,
-    b: Object,
+    a: Any,
+    b: Any,
     substitution: Substitution
 ): Option[Substitution] = {
   if (a == b) Some(substitution)
@@ -32,7 +32,7 @@ def unify(
     subst
 }
 
-def substitute(v: Object, substitution: Substitution): Object = {
+def substitute(v: Any, substitution: Substitution): Any = {
   v match {
     case v: Unifiable => v.substitute_self(substitution)
     case _            => v
@@ -41,7 +41,7 @@ def substitute(v: Object, substitution: Substitution): Object = {
 
 class Variable(name: String) extends Unifiable {
   def unify_self(
-      other: Object,
+      other: Any,
       substitution: Substitution
   ): Option[Substitution] = {
     substitution.get(this) match {
@@ -53,7 +53,7 @@ class Variable(name: String) extends Unifiable {
         }
     }
   }
-  def substitute_self(substitution: Substitution): Object = {
+  def substitute_self(substitution: Substitution): Any = {
     substitution.get(this) match {
       case Some(value) => value
       case None        => this
@@ -63,10 +63,10 @@ class Variable(name: String) extends Unifiable {
   override def toString(): String = "?" ++ name
 }
 
-class Predicate(val name: String, val variables: List[Object])
+class Predicate(val name: String, val variables: List[Any])
     extends Unifiable {
   def unify_self(
-      other: Object,
+      other: Any,
       substitution: Substitution
   ): Option[Substitution] = {
     other match {
@@ -87,7 +87,7 @@ class Predicate(val name: String, val variables: List[Object])
       case _ => None
     }
   }
-  def substitute_self(substitution: Substitution): Object = {
+  def substitute_self(substitution: Substitution): Any = {
     Predicate(name, variables.map(substitute(_, substitution)))
   }
 
@@ -103,36 +103,36 @@ class Predicate(val name: String, val variables: List[Object])
 
 class Fail(message: String) extends Unifiable {
   def unify_self(
-      other: Object,
+      other: Any,
       substitution: Substitution
   ): Option[Substitution] = {
     throw new TypeError(message)
   }
-  def substitute_self(substitution: Substitution): Object = {
+  def substitute_self(substitution: Substitution): Any = {
     assert(false, "Fail should not be substituted")
   }
 }
 
 class Bail extends Unifiable {
   def unify_self(
-      other: Object,
+      other: Any,
       substitution: Substitution
   ): Option[Substitution] = {
     None
   }
-  def substitute_self(substitution: Substitution): Object = {
+  def substitute_self(substitution: Substitution): Any = {
     assert(false, "Bail should not be substituted")
   }
 }
 
 class Succeed extends Unifiable {
   def unify_self(
-      other: Object,
+      other: Any,
       substitution: Substitution
   ): Option[Substitution] = {
     Some(substitution)
   }
-  def substitute_self(substitution: Substitution): Object = {
+  def substitute_self(substitution: Substitution): Any = {
     this
   }
 }

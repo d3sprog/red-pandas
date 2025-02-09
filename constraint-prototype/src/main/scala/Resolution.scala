@@ -1,6 +1,6 @@
 package red_pandas
 
-type Clause = List[Object]
+type Clause = List[Any]
 type Rule = Clause
 
 class Goal (clause: Clause, substitution: Substitution) {
@@ -39,8 +39,8 @@ class Goal (clause: Clause, substitution: Substitution) {
 
 def transitive_get(
     substitution: Substitution,
-    variable: Object
-): Object = {
+    variable: Any
+): Any = {
   substitution.get(variable) match {
     case Some(value) =>
       value match {
