@@ -16,9 +16,7 @@ object Substitution {
     def keys: Iterable[Variable] = s.keys
 }
 
-extension (it: Iterable[(Variable, Term)])
-    def toSubst: Substitution = it.toMap
-
+extension (it: Iterable[(Variable, Term)]) def toSubst: Substitution = it.toMap
 
 class TypeError(message: String) extends Exception(message) {}
 
@@ -27,8 +25,18 @@ trait Unifiable {
       other: Term,
       substitution: Substitution
   ): Option[Substitution]
+}
+
+trait Substitutable {
   def substitute_self(substitution: Substitution): Term
 }
+
+trait Foreign {
+  def call(): Boolean
+}
+
+// TODO: think of the arguments
+case class IncompleteCall(missing: List[Term]) extends Exception
 
 def unify(
     a: Term,
@@ -52,13 +60,13 @@ def unify(
 
 def substitute(v: Term, substitution: Substitution): Term = {
   v match {
-    case v: Unifiable => v.substitute_self(substitution)
-    case _            => v
+    case v: Substitutable => v.substitute_self(substitution)
+    case _                => v
   }
 }
 
 // Note that Variable uses referential equality for unification
-final class Variable(name: String) extends Unifiable {
+final class Variable(name: String) extends Unifiable, Substitutable {
   override def unify_with(
       other: Term,
       substitution: Substitution
@@ -85,21 +93,31 @@ final class Variable(name: String) extends Unifiable {
 }
 
 final case class Predicate(name: String, args: List[Term])
-    extends Unifiable {
+    extends Unifiable,
+      Substitutable {
 
-  def can_unify(other: Predicate): Boolean = name == other.name && this.args.length == other.args.length
-  
+  def can_unify(other: Predicate): Boolean =
+    name == other.name && this.args.length == other.args.length
+
   override def unify_with(
       other: Term,
       substitution: Substitution
   ): Option[Substitution] = other match {
-    case other: Predicate if can_unify(other) => unify_args(this.args, other.args, substitution)
+    case other: Predicate if can_unify(other) =>
+      unify_args(this.args, other.args, substitution)
     case _ => None
   }
 
-  def unify_args(xs: List[Term], ys: List[Term], substitution: Substitution): Option[Substitution] = (xs, ys) match {
+  def unify_args(
+      xs: List[Term],
+      ys: List[Term],
+      substitution: Substitution
+  ): Option[Substitution] = (xs, ys) match {
     case (Nil, Nil) => Some(substitution)
-    case (x :: xs, y :: ys) => unify(x, y, substitution).flatMap(substitution => unify_args(xs, ys, substitution))
+    case (x :: xs, y :: ys) =>
+      unify(x, y, substitution).flatMap(substitution =>
+        unify_args(xs, ys, substitution)
+      )
     case _ => None
   }
 
@@ -118,35 +136,8 @@ final case class Predicate(name: String, args: List[Term])
   }
 }
 
-class Fail(message: String) extends Unifiable {
-  override def unify_with(other: Term, substitution: Substitution): Option[Substitution] = {
+class Fail(message: String) extends Foreign {
+  override def call(): Boolean = {
     throw new TypeError(message)
-  }
-  override def substitute_self(substitution: Substitution): Term = {
-    assert(false, "Fail should not be substituted")
-  }
-}
-
-class Bail extends Unifiable {
-  override def unify_with(
-      other: Term,
-      substitution: Substitution
-  ): Option[Substitution] = {
-    None
-  }
-  override def substitute_self(substitution: Substitution): Term = {
-    assert(false, "Bail should not be substituted")
-  }
-}
-
-class Succeed extends Unifiable {
-  override def unify_with(
-      other: Term,
-      substitution: Substitution
-  ): Option[Substitution] = {
-    Some(substitution)
-  }
-  override def substitute_self(substitution: Substitution): Term = {
-    this
   }
 }
