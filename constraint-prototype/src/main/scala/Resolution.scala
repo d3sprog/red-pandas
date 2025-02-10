@@ -3,7 +3,7 @@ package red_pandas
 type Clause = List[Any]
 type Rule = Clause
 
-class Goal (clause: Clause, substitution: Substitution) {
+case class Goal (clause: Clause, substitution: Substitution) {
   def is_resolved: Boolean = clause.isEmpty
 
   def get_substitution: Substitution = {
@@ -12,35 +12,20 @@ class Goal (clause: Clause, substitution: Substitution) {
   }
 
   def resolve(rules: List[Clause]): List[Goal] = {
-    if (clause.isEmpty) List(new Goal(List.empty, this.substitution))
-    else {
-      val head = clause.head
-      val tail = clause.tail
-
-      val new_goals: List[Goal] = rules
-        .flatMap(rule =>
-          val rule_head = rule.head
-          val rule_body = rule.tail
-            unify(head, rule_head, substitution) match {
-              case Some(sub) =>
-                Some(
-                  new Goal(
-                    rule_body.map(substitute(_, sub)) ++ tail,
-                    sub
-                  )
-                )
-              case None => None
-          }
-        )
-      new_goals
+    this.clause match {
+      case Nil => List(Goal(List.empty, this.substitution))
+      case head :: tail => rules.flatMap(rule => {
+        unify(head, rule.head, substitution)
+          .map(subst => Goal(rule.tail.map(substitute(_, subst)) ++ tail, subst))
+      })
     }
   }
 }
 
 def transitive_get(
     substitution: Substitution,
-    variable: Any
-): Any = {
+    variable: Variable
+): Term = {
   substitution.get(variable) match {
     case Some(value) =>
       value match {
@@ -52,7 +37,7 @@ def transitive_get(
 }
 
 def cleanup_substitution(substitution: Substitution): Substitution = {
-  substitution.keys.map(key => (key, transitive_get(substitution, key))).toMap
+  substitution.keys.map(key => (key, transitive_get(substitution, key))).toSubst
 }
 
 def iteration_limit = 1000
@@ -61,7 +46,7 @@ def resolve_goals(
     innitial_goal: Clause,
     rules: List[Rule],
 ): List[Substitution] = {
-  var stack =List(new Goal(innitial_goal, Map.empty))
+  var stack =List(new Goal(innitial_goal, Substitution.empty))
   var results = List.empty[Substitution]
   var iteration = 0
 

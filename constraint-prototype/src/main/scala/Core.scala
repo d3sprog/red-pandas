@@ -1,30 +1,48 @@
 package red_pandas
 
-type Substitution = Map[Any, Any]
+type Term = Any
+
+opaque type Substitution = Map[Variable, Term]
+object Substitution {
+  def empty: Substitution = Map.empty
+  def singleton(variable: Variable, term: Term): Substitution = Map(
+    variable -> term
+  )
+
+  extension (s: Substitution)
+    def get(v: Variable): Option[Term] = s.get(v)
+    def put(v: Variable, t: Term): Substitution = s + (v -> t)
+    def getOrElse(v: Variable, default: Term): Term = s.getOrElse(v, default)
+    def keys: Iterable[Variable] = s.keys
+}
+
+extension (it: Iterable[(Variable, Term)])
+    def toSubst: Substitution = it.toMap
+
 
 class TypeError(message: String) extends Exception(message) {}
 
 trait Unifiable {
-  def unify_self(
-      other: Any,
+  def unify_with(
+      other: Term,
       substitution: Substitution
   ): Option[Substitution]
-  def substitute_self(substitution: Substitution): Any
+  def substitute_self(substitution: Substitution): Term
 }
 
 def unify(
-    a: Any,
-    b: Any,
+    a: Term,
+    b: Term,
     substitution: Substitution
 ): Option[Substitution] = {
   if (a == b) Some(substitution)
   else
     val subst = a match {
-      case a: Unifiable => a.unify_self(b, substitution)
+      case a: Unifiable => a.unify_with(b, substitution)
       case _ =>
         b match {
-          case b: Unifiable => b.unify_self(a, substitution)
-          case _            => {
+          case b: Unifiable => b.unify_with(a, substitution)
+          case _ => {
             None
           }
         }
@@ -32,107 +50,103 @@ def unify(
     subst
 }
 
-def substitute(v: Any, substitution: Substitution): Any = {
+def substitute(v: Term, substitution: Substitution): Term = {
   v match {
     case v: Unifiable => v.substitute_self(substitution)
     case _            => v
   }
 }
 
-class Variable(name: String) extends Unifiable {
-  def unify_self(
-      other: Any,
+// Note that Variable uses referential equality for unification
+final class Variable(name: String) extends Unifiable {
+  override def unify_with(
+      other: Term,
       substitution: Substitution
   ): Option[Substitution] = {
     substitution.get(this) match {
       case Some(value) => unify(value, other, substitution)
       case None =>
-        substitution.get(other) match {
-          case Some(value) => unify(this, value, substitution)
-          case None        => Some(substitution + (this -> other))
+        other match {
+          case other: Variable =>
+            substitution.get(other) match {
+              case Some(value) => unify(this, value, substitution)
+              case None        => Some(substitution.put(this, other))
+            }
+          case _ => Some(substitution.put(this, other))
         }
     }
   }
-  def substitute_self(substitution: Substitution): Any = {
-    substitution.get(this) match {
-      case Some(value) => value
-      case None        => this
-    }
+
+  override def substitute_self(substitution: Substitution): Term = {
+    substitution.getOrElse(this, this)
   }
 
   override def toString(): String = "?" ++ name
 }
 
-class Predicate(val name: String, val variables: List[Any])
+final case class Predicate(name: String, args: List[Term])
     extends Unifiable {
-  def unify_self(
-      other: Any,
+
+  def can_unify(other: Predicate): Boolean = name == other.name && this.args.length == other.args.length
+  
+  override def unify_with(
+      other: Term,
       substitution: Substitution
-  ): Option[Substitution] = {
-    other match {
-      case other: Predicate =>
-        if (name != other.name || variables.length != other.variables.length)
-          None
-        else
-          variables
-            .zip(other.variables)
-            .foldLeft[Option[Substitution]](
-              Some(substitution)
-            )((substitution, pair) =>
-              substitution match {
-                case None               => None
-                case Some(substitution) => unify(pair._1, pair._2, substitution)
-              }
-            )
-      case _ => None
-    }
-  }
-  def substitute_self(substitution: Substitution): Any = {
-    Predicate(name, variables.map(substitute(_, substitution)))
+  ): Option[Substitution] = other match {
+    case other: Predicate if can_unify(other) => unify_args(this.args, other.args, substitution)
+    case _ => None
   }
 
-  override def toString(): String = name ++ "(" ++ variables.mkString(", ") ++ ")"
-  override def equals(that: Any): Boolean = {
+  def unify_args(xs: List[Term], ys: List[Term], substitution: Substitution): Option[Substitution] = (xs, ys) match {
+    case (Nil, Nil) => Some(substitution)
+    case (x :: xs, y :: ys) => unify(x, y, substitution).flatMap(substitution => unify_args(xs, ys, substitution))
+    case _ => None
+  }
+
+  override def substitute_self(substitution: Substitution): Term = {
+    this.copy(args = this.args.map(substitute(_, substitution)))
+  }
+
+  override def toString(): String =
+    name ++ "(" ++ args.mkString(", ") ++ ")"
+  override def equals(that: Term): Boolean = {
     that match {
       case that: Predicate =>
-        name == that.name && variables == that.variables
+        this.name == that.name && this.args == that.args
       case _ => false
     }
   }
 }
 
 class Fail(message: String) extends Unifiable {
-  def unify_self(
-      other: Any,
-      substitution: Substitution
-  ): Option[Substitution] = {
+  override def unify_with(other: Term, substitution: Substitution): Option[Substitution] = {
     throw new TypeError(message)
   }
-  def substitute_self(substitution: Substitution): Any = {
+  override def substitute_self(substitution: Substitution): Term = {
     assert(false, "Fail should not be substituted")
   }
 }
 
 class Bail extends Unifiable {
-  def unify_self(
-      other: Any,
+  override def unify_with(
+      other: Term,
       substitution: Substitution
   ): Option[Substitution] = {
     None
   }
-  def substitute_self(substitution: Substitution): Any = {
+  override def substitute_self(substitution: Substitution): Term = {
     assert(false, "Bail should not be substituted")
   }
 }
 
 class Succeed extends Unifiable {
-  def unify_self(
-      other: Any,
+  override def unify_with(
+      other: Term,
       substitution: Substitution
   ): Option[Substitution] = {
     Some(substitution)
   }
-  def substitute_self(substitution: Substitution): Any = {
+  override def substitute_self(substitution: Substitution): Term = {
     this
   }
 }
