@@ -1,5 +1,7 @@
 package red_pandas
 
+import scala.collection.IndexedSeqView.Id
+
 type Term = Any
 
 opaque type Substitution = Map[Variable, Term]
@@ -35,6 +37,12 @@ trait Foreign {
   def call(): Boolean
 }
 
+trait Identity {
+  def identityEquality(other: Term): Boolean = {
+    System.identityHashCode(this) == System.identityHashCode(other)
+  }
+}
+
 // TODO: think of the arguments
 case class IncompleteCall(missing: List[Term]) extends Exception
 
@@ -43,7 +51,8 @@ def unify(
     b: Term,
     substitution: Substitution
 ): Option[Substitution] = {
-  if (a == b) Some(substitution)
+  if (a.isInstanceOf[Identity] && a.asInstanceOf[Identity].identityEquality(b)) Some(substitution)
+  else if (a == b) Some(substitution)
   else
     val subst = a match {
       case a: Unifiable => a.unify_with(b, substitution)
@@ -66,7 +75,7 @@ def substitute(v: Term, substitution: Substitution): Term = {
 }
 
 // Note that Variable uses referential equality for unification
-final class Variable(name: String) extends Unifiable, Substitutable {
+final class Variable(val name: String) extends Unifiable, Substitutable, Identity {
   override def unify_with(
       other: Term,
       substitution: Substitution
@@ -90,6 +99,11 @@ final class Variable(name: String) extends Unifiable, Substitutable {
   }
 
   override def toString(): String = "?" ++ name
+
+  override def equals(obj: Any): Boolean = obj match {
+    case obj: Variable => this.name == obj.name
+    case _             => false
+  }
 }
 
 final case class Predicate(name: String, args: List[Term])
