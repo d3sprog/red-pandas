@@ -1,11 +1,19 @@
 package red_pandas
 
+import scala.util.parsing.combinator.Parsers
+
+def print_if_fail(parser: Parsers, result: parser.ParseResult[?]): Unit = {
+    if (!result.successful) {
+        println("Failed to parse: " + result)
+    }
+}
+
 class ParserTest extends munit.FunSuite {
     test("parse simple clause") {
         val env = new PythonEnvironment()
         val parser = new Parser(env)
         val result = parser.parseAll(parser.clause, "likes(?maya, ?pandas).")
-        println("Result: " + result)
+        print_if_fail(parser, result)
         assert(result.successful)
         assertEquals(result.get, List(Predicate("likes", List(Variable("maya"), Variable("pandas")))))
     }
@@ -14,7 +22,7 @@ class ParserTest extends munit.FunSuite {
         val env = new PythonEnvironment()
         val parser = new Parser(env)
         val result = parser.parseAll(parser.clause, "likes(?maya, ?pandas) :- cute(?pandas).")
-        println("Result: " + result)
+        print_if_fail(parser, result)
         assert(result.successful)
         assertEquals(result.get, List(Predicate("likes", List(Variable("maya"), Variable("pandas"))), Predicate("cute", List(Variable("pandas")))))
     }
@@ -23,7 +31,7 @@ class ParserTest extends munit.FunSuite {
         val env = new PythonEnvironment()
         val parser = new Parser(env)
         val result = parser.parseAll(parser.query, "?- likes(?maya, ?pandas).")
-        println("Result: " + result)
+        print_if_fail(parser, result)
         assert(result.successful)
         assertEquals(result.get, List(Predicate("likes", List(Variable("maya"), Variable("pandas")))))
     }
@@ -32,7 +40,7 @@ class ParserTest extends munit.FunSuite {
         val env = new PythonEnvironment()
         val parser = new Parser(env)
         val result = parser.parseAll(parser.python_predicate, "#p\"print('Hello, world!')\"")
-        println("Result: " + result)
+        print_if_fail(parser, result)
         assert(result.successful)
         assert(result.get.isInstanceOf[PythonPredicate])
         assert(result.get.template(List.empty) == "print('Hello, world!')")
@@ -42,7 +50,7 @@ class ParserTest extends munit.FunSuite {
         val env = new PythonEnvironment()
         val parser = new Parser(env)
         val result = parser.parseAll(parser.python_variable, "#pX")
-        println("Result: " + result)
+        print_if_fail(parser, result)
         assert(result.successful)
         assertEquals(result.get, PythonVariable("X", env))
     }
@@ -51,7 +59,7 @@ class ParserTest extends munit.FunSuite {
         val env = new PythonEnvironment()
         val parser = new Parser(env)
         val result = parser.parseAll(parser.pseudo_variable, "#?X")
-        println("Result: " + result)
+        print_if_fail(parser, result)
         assert(result.successful)
         assertEquals(result.get, PseudoVariable("X"))
     }
