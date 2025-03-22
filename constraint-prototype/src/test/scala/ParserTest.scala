@@ -30,7 +30,7 @@ class ParserTest extends munit.FunSuite {
     test("parse query") {
         val env = new PythonEnvironment()
         val parser = new Parser(env)
-        val result = parser.parseAll(parser.query, "?- likes(?maya, ?pandas).")
+        val result = parser.parseAll(parser.query, "? likes(?maya, ?pandas).")
         print_if_fail(parser, result)
         assert(result.successful)
         assertEquals(result.get, List(Predicate("likes", List(Variable("maya"), Variable("pandas")))))
@@ -44,6 +44,16 @@ class ParserTest extends munit.FunSuite {
         assert(result.successful)
         assert(result.get.isInstanceOf[PythonPredicate])
         assert(result.get.template(List.empty) == "print('Hello, world!')")
+    }
+
+    test("parse python predicate clause") {
+        val env = new PythonEnvironment()
+        val parser = new Parser(env)
+        val result = parser.parseAll(parser.clause, "print(?x) :- #p\"print($?x)\".")
+        print_if_fail(parser, result)
+        assert(result.successful)
+        assert(result.get.tail.head.isInstanceOf[PythonPredicate])
+        assertEquals(result.get.tail.head.asInstanceOf[PythonPredicate].template(List(1)), "print(1)")
     }
 
     test("parse python variable") {

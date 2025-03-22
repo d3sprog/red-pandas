@@ -9,6 +9,7 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.Await
 import scala.util.Success
 import scala.util.Failure
+import scala.compiletime.ops.string
 
 case class PythonEnvironment(process: InteractiveProcess) extends AutoCloseable {
     def this() = {
@@ -38,6 +39,29 @@ trait PythonEvaluatable {
   def python_representation(): String
 }
 
+object PythonEvaluatable {
+  given intAsPythonEvaluatable: Conversion[Int, PythonEvaluatable] with {
+    def apply(i: Int): PythonEvaluatable = new PythonEvaluatable {
+      override def python_representation(): String = i.toString
+    }
+  }
+
+  given stringAsPythonEvaluatable: Conversion[String, PythonEvaluatable] with {
+    def apply(s: String): PythonEvaluatable = new PythonEvaluatable {
+      override def python_representation(): String = s
+    }
+  }
+}
+
+
+extension (i: Int){
+  def python_representation(): String = i.toString
+}
+extension (s: String){
+  def python_representation(): String = s
+}
+
+
 final case class PythonVariable(python_name: String, env: PythonEnvironment)
     extends PythonEvaluatable {
   override def toString(): String = "python/" ++ this.python_name
@@ -53,36 +77,6 @@ final class PseudoVariable(val name: String) extends Identity {
   }
 }
 
-/// parses a python code that contains `$variable`
-/// for variables that should be substituted by
-/// the solver
-///
-/// Some invariants must hold:
-/// - variables must only contain [a-zA-Z]
-/// - variables must be unique
-/// - order of first appearance is the order of the arguments
-def python_pred_from_string(
-    string: String,
-    env: PythonEnvironment
-): PythonPredicate = {
-  val regex = Regex("\\$(\\w+)");
-  val variables = regex.findAllIn(string).distinct.toList
-
-  val template = (args: List[PythonEvaluatable]) => {
-    var code = string
-
-    for ((variable, i) <- variables.zipWithIndex) {
-      code = code.replaceAllLiterally(
-        "$" ++ variable,
-        args(i).python_representation()
-      )
-    }
-    code
-  }
-
-  val free_variables = variables.map(Variable(_));
-  PythonPredicate(free_variables, template, env)
-}
 
 def python_var_from_string(string: String, env: PythonEnvironment): PythonVariable =
   PythonVariable(string, env)
