@@ -64,12 +64,12 @@ extension (s: String){
 
 final case class PythonVariable(python_name: String, env: PythonEnvironment)
     extends PythonEvaluatable {
-  override def toString(): String = "python/" ++ this.python_name
+  override def toString(): String = "#p" ++ this.python_name
   override def python_representation(): String = this.python_name
 }
 
 final class PseudoVariable(val name: String) extends Identity {
-  override def toString(): String = "pseudo/" ++ this.name
+  override def toString(): String = "#?" ++ this.name
 
   override def equals(obj: Any): Boolean = obj match {
     case obj: PseudoVariable => this.name == obj.name
