@@ -10,8 +10,10 @@
       in
         {
           devShells.default = pkgs.mkShell {
-            packages = with pkgs; [
-              sbt
+            nativeBuildInputs = with pkgs; [
+              (pkgs.sbt.override {
+                jre = pkgs.graalvmPackages.graalvm-ce;
+              })
               metals
               unzip
               python3
