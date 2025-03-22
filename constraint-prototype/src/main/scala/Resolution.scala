@@ -98,5 +98,5 @@ def resolve_pretty(
   val results = resolve_goals(goal, rules)
   val cleaned =
     results.map(substitution => goal.map(substitute(_, substitution)))
-  cleaned
+  if cleaned.isEmpty && !results.isEmpty then List(List("true")) else if cleaned.isEmpty then List(List("false")) else cleaned
 }
