@@ -1,12 +1,37 @@
 package red_pandas
 
 import scala.util.matching.Regex
+import java.io.File
+import scala.sys.process._
+import java.io.OutputStream
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt 
+import scala.concurrent.Await
+import scala.util.Success
+import scala.util.Failure
 
-case class PythonEnvironment() {}
+case class PythonEnvironment(process: InteractiveProcess) extends AutoCloseable {
+    def this() = {
+      this(
+        InteractiveProcess(
+          Seq("python3", "-i"),
+          environment = Map("PYTHONUNBUFFERED" -> "1")
+        )
+      )
+      this.process.start() match {
+        case Success(value) => println("Python started")
+        case Failure(exception) => println("Python failed to start: " + exception.getMessage())
+      }
+    }
 
-def eval_python(code: String, env: PythonEnvironment): Boolean = {
-  println("Evaluating $code")
-  true
+    def eval(code: String): String = {
+      Await.result(this.process.sendAndReceive(code), 5.seconds).dropRight(1) // remove the last newline
+    }
+  
+    @Override
+    def close(): Unit = {
+      this.process.stop()
+    }
 }
 
 trait PythonEvaluatable {
@@ -80,7 +105,7 @@ final case class PythonPredicate(
     if this.args.forall(_.isInstanceOf[PythonEvaluatable]) then {
       val python_args = this.args.map(_.asInstanceOf[PythonEvaluatable])
       val code = this.template(python_args)
-      eval_python(code, this.env)
+      this.env.eval(code) == "True"
     } else {
       val missing_variables =
         this.args.filter(!_.isInstanceOf[PythonEvaluatable])

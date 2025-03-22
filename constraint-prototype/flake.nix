@@ -14,6 +14,7 @@
               sbt
               metals
               unzip
+              python3
             ];
           };
         }

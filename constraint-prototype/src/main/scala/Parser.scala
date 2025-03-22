@@ -3,6 +3,8 @@ package red_pandas
 import scala.util.parsing.combinator._
 
 class Parser(env: PythonEnvironment) extends RegexParsers {
+    var scope: Map[String, Variable] = Map.empty
+
     def program = rep(clause) ~ query | query
     def clause: Parser[Clause] = 
         predicate ~ ":-" ~ repsep(predicate, ",") ~ "." ^^ {
@@ -22,12 +24,15 @@ class Parser(env: PythonEnvironment) extends RegexParsers {
     def pseudo_variable: Parser[PseudoVariable] = 
         "#?" ~ variable_stem ^^ { case _ ~ s => PseudoVariable(s) }
     def term: Parser[Term] = numeral | atom | variable // maybe? | structure
-    def query: Parser[Clause] = "?-" ~ repsep(predicate, ",") ~ "." ^^ {
+    def query: Parser[Clause] = "?" ~ repsep(predicate, ",") ~ "." ^^ {
         case _ ~ predicates ~ _ => predicates
     }
     def atom: Parser[String] = small_atom | string
     def small_atom: Parser[String] = """[A-Za-z][a-zA-Z0-9_]*""".r ^^ { _.toString }
-    def variable: Parser[Variable] = "?" ~ variable_stem ^^ { case _ ~ s => Variable(s) }
+    def variable: Parser[Variable] = "?" ~ variable_stem ^^ { case _ ~ s => scope.get(s) match {
+        case Some(v) => v
+        case None => val v = Variable(s); scope = scope + (s -> v); v
+    } }
 
     def variable_stem: Parser[String] = """[a-zA-Z0-9_]*""".r ^^ { _.toString }
 
