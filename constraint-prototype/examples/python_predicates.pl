@@ -1,7 +1,7 @@
-List(?object) :- #p"$object.type_str == 'list'".
-Dict(?object) :- #p"$object.type_str == 'dict'".
-Tuple(?object) :- #p"$object.type_str == 'tuple'".
-Set(?object) :- #p"$object.type_str == 'set'".
+List(?object) :- #p"isinstance($object, list)".
+Dict(?object) :- #p"isinstance($object, dict)".
+Tuple(?object) :- #p"isinstance($object, tuple)".
+Set(?object) :- #p"isinstance($object, set)".
 
 get(?object, ?key) :- Dict(?object), #p"$object[$key]".
 
