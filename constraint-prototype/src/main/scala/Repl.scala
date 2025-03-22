@@ -51,6 +51,8 @@ class Repl {
       System.exit(0)
     } else if (input == ":rules" || input == ":r") {
       println(this.rules)
+    } else if (input == ":clear" || input == ":c") {
+      this.rules = List.empty
     } else if (input.startsWith(":load") || input.startsWith(":l")) {
       val filename = input.split(" ").last
       val source = scala.io.Source.fromFile(filename)
