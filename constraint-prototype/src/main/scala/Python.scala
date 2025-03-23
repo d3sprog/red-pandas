@@ -10,28 +10,20 @@ import scala.concurrent.Await
 import scala.util.Success
 import scala.util.Failure
 import scala.compiletime.ops.string
+import red_pandas.ipython.IPythonKernel
 
-case class PythonEnvironment(process: InteractiveProcess) extends AutoCloseable {
+case class PythonEnvironment(kernel: IPythonKernel) extends AutoCloseable {
     def this() = {
-      this(
-        InteractiveProcess(
-          Seq("python3", "-i"),
-          environment = Map("PYTHONUNBUFFERED" -> "1")
-        )
-      )
-      this.process.start() match {
-        case Success(value) => println("Python started")
-        case Failure(exception) => println("Python failed to start: " + exception.getMessage())
-      }
+      this(IPythonKernel.start())
     }
 
     def eval(code: String): String = {
-      Await.result(this.process.sendAndReceive(code), 5.seconds).dropRight(1) // remove the last newline
+      this.kernel.eval(code)
     }
   
     @Override
     def close(): Unit = {
-      this.process.stop()
+      this.kernel.close()
     }
 }
 
