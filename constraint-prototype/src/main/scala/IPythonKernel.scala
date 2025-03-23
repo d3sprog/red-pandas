@@ -2,11 +2,7 @@ package red_pandas
 
 package ipython
 
-import cats.effect.{IO, Resource}
-import cats.effect.unsafe.implicits.global
 import io.circe._
-import io.circe.generic.auto._
-import io.circe.syntax._
 import io.circe.parser.parse
 import java.io.File
 import scala.sys.process._
