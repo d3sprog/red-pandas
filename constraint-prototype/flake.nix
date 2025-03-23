@@ -14,9 +14,15 @@
               (pkgs.sbt.override {
                 jre = pkgs.graalvmPackages.graalvm-ce;
               })
-              metals
+              # graalvmPackages.graalvm-ce
+              (pkgs.metals.override {
+                jre = pkgs.graalvmPackages.graalvm-ce;
+              })
+              zlib
               unzip
               python3
+              python3Packages.pandas
+              python3Packages.numpy
             ];
           };
         }

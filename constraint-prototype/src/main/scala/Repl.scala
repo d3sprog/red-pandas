@@ -40,6 +40,16 @@ class Repl {
     }
   }
 
+  def load_file(filename: String): Unit = {
+      val source = scala.io.Source.fromFile(filename)
+      val lines = source.getLines()
+      for (line <- lines) {
+        println(line)
+        read_eval(line)
+      }
+      source.close()
+  }
+
   def read_eval(input: String): Unit = {
     if (input.isBlank()) {
       return
@@ -55,13 +65,7 @@ class Repl {
       this.rules = List.empty
     } else if (input.startsWith(":load") || input.startsWith(":l")) {
       val filename = input.split(" ").last
-      val source = scala.io.Source.fromFile(filename)
-      val lines = source.getLines()
-      for (line <- lines) {
-        println(line)
-        read_eval(line)
-      }
-      source.close()
+      load_file(filename)
     } else if (input.startsWith(":python") || input.startsWith(":p")) {
       val code = input.split(" ").tail.mkString(" ")
       println(env.eval(code))
@@ -79,6 +83,7 @@ class Repl {
     while (true) {
       print("∫ ")
       val input = scala.io.StdIn.readLine()
+      if (input == null) return // EOF
       read_eval(input)
     }
   }
