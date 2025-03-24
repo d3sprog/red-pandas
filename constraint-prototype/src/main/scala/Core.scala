@@ -140,7 +140,7 @@ final case class Predicate(name: String, args: List[Term])
   }
 
   override def toString(): String =
-    name ++ "(" ++ args.mkString(", ") ++ ")"
+    name ++ (if (args.length > 0) then "(" ++ args.mkString(", ") ++ ")" else "")
   override def equals(that: Term): Boolean = {
     that match {
       case that: Predicate =>
