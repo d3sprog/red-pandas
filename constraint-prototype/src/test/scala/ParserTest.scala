@@ -11,7 +11,7 @@ def print_if_fail(parser: Parsers, result: parser.ParseResult[?]): Unit = {
 class ParserTest extends munit.FunSuite {
     test("parse simple clause") {
         val env = new PythonEnvironment()
-        val parser = new Parser(env)
+        val parser = new Parser(Some(env))
         val result = parser.parseAll(parser.clause, "likes(?maya, ?pandas).")
         print_if_fail(parser, result)
         assert(result.successful)
@@ -20,7 +20,7 @@ class ParserTest extends munit.FunSuite {
 
     test("parse clause with body") {
         val env = new PythonEnvironment()
-        val parser = new Parser(env)
+        val parser = new Parser(Some(env))
         val result = parser.parseAll(parser.clause, "likes(?maya, ?pandas) :- cute(?pandas).")
         print_if_fail(parser, result)
         assert(result.successful)
@@ -29,7 +29,7 @@ class ParserTest extends munit.FunSuite {
 
     test("parse query") {
         val env = new PythonEnvironment()
-        val parser = new Parser(env)
+        val parser = new Parser(Some(env))
         val result = parser.parseAll(parser.query, "? likes(?maya, ?pandas).")
         print_if_fail(parser, result)
         assert(result.successful)
@@ -38,7 +38,7 @@ class ParserTest extends munit.FunSuite {
 
     test("parse python predicate") {
         val env = new PythonEnvironment()
-        val parser = new Parser(env)
+        val parser = new Parser(Some(env))
         val result = parser.parseAll(parser.python_predicate, "#p\"print('Hello, world!')\"")
         print_if_fail(parser, result)
         assert(result.successful)
@@ -48,7 +48,7 @@ class ParserTest extends munit.FunSuite {
 
     test("parse python predicate clause") {
         val env = new PythonEnvironment()
-        val parser = new Parser(env)
+        val parser = new Parser(Some(env))
         val result = parser.parseAll(parser.clause, "print(?x) :- #p\"print($?x)\".")
         print_if_fail(parser, result)
         assert(result.successful)
@@ -58,7 +58,7 @@ class ParserTest extends munit.FunSuite {
 
     test("parse python variable") {
         val env = new PythonEnvironment()
-        val parser = new Parser(env)
+        val parser = new Parser(Some(env))
         val result = parser.parseAll(parser.python_variable, "#pX")
         print_if_fail(parser, result)
         assert(result.successful)
@@ -67,7 +67,7 @@ class ParserTest extends munit.FunSuite {
 
     test("parse pseudo variable") {
         val env = new PythonEnvironment()
-        val parser = new Parser(env)
+        val parser = new Parser(Some(env))
         val result = parser.parseAll(parser.pseudo_variable, "#?X")
         print_if_fail(parser, result)
         assert(result.successful)
