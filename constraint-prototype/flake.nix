@@ -18,6 +18,7 @@
               (pkgs.metals.override {
                 jre = pkgs.graalvmPackages.graalvm-ce;
               })
+              openjdk
               zlib
               unzip
               python3

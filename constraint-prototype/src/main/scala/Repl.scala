@@ -11,13 +11,23 @@ def print_if_fail(parser: Parsers, result: parser.ParseResult[?]): Unit = {
   }
 }
 
-class Repl {
-  val env = new PythonEnvironment()
+object Repl {
+  def start(python: Boolean = true): Repl = {
+    val env: Option[PythonEnvironment] = if (python) Some(new PythonEnvironment()) else None
+    new Repl(env)
+  }
+}
+
+class Repl(val env: Option[PythonEnvironment]) {
   var rules = List.empty[Rule]
   val parser = new Parser(env)
 
   def eval_query(input: String): Unit = {
-    val parsed = parser.parseAll(parser.query, input)
+    val parsed = try parser.parseAll(parser.query, input)
+    catch case e: Exception => {
+      println(e.getMessage())
+      return
+    }
     print_if_fail(parser, parsed)
     if (parsed.successful) {
       val results = resolve_pretty(parsed.get, this.rules)
@@ -31,7 +41,11 @@ class Repl {
 
   def add_rule(input: String): Unit = {
     val parser = new Parser(env)
-    val parsed = parser.parseAll(parser.clause, input)
+    val parsed = try parser.parseAll(parser.clause, input)
+    catch case e: Exception => {
+      println(e.getMessage())
+      return
+    }
     print_if_fail(parser, parsed)
     if (parsed.successful) {
       this.rules = parsed.get :: this.rules
@@ -68,7 +82,10 @@ class Repl {
       load_file(filename)
     } else if (input.startsWith(":python") || input.startsWith(":p")) {
       val code = input.split(" ").tail.mkString(" ")
-      println(env.eval(code))
+      this.env match {
+        case Some(env) => println(env.eval(code))
+        case None => println("ERROR: Python environment not available")
+      }
     } else if (input.startsWith(":")) {
       println("Unknown command " + input)
     } else if (input.startsWith("?")) {

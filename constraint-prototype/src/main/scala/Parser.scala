@@ -2,7 +2,7 @@ package red_pandas
 
 import scala.util.parsing.combinator._
 
-class Parser(env: PythonEnvironment) extends RegexParsers {
+class Parser(env: Option[PythonEnvironment]) extends RegexParsers {
 /// parses a python code that contains `$variable`
 /// for variables that should be substituted by
 /// the solver
@@ -73,10 +73,16 @@ class Parser(env: PythonEnvironment) extends RegexParsers {
       atom ^^ { Predicate(_, List.empty) }
   def python_predicate: Parser[PythonPredicate] =
     "#p" ~ string ^^ {
-      case _ ~ s => this.python_pred_from_string(s, env)
+      case _ ~ s => this.env match {
+        case Some(env) => this.python_pred_from_string(s, env)
+        case None      => throw Exception("ERROR: Python environment not available")
+      }
     }
   def python_variable: Parser[PythonVariable] =
-    "#p" ~ variable_stem ^^ { case _ ~ s => python_var_from_string(s, env) }
+    "#p" ~ variable_stem ^^ { case _ ~ s => this.env match {
+      case Some(env) => python_var_from_string(s, env)
+      case None      => throw Exception("ERROR: Python environment not available")
+    } }
   def pseudo_variable: Parser[PseudoVariable] =
     "#?" ~ variable_stem ^^ { case _ ~ s => PseudoVariable(s) }
   def term: Parser[Term] =

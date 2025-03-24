@@ -21,9 +21,15 @@ lazy val root = project
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.14.2",
       "commons-codec" % "commons-codec" % "1.15",
     ),
-
+    // Dirty hack for sbt-assembly to work
+    // see https://github.com/sbt/sbt-assembly/issues/391
+    assembly / assemblyMergeStrategy := {
+      case PathList("module-info.class")                                 => MergeStrategy.discard
+      case PathList("META-INF", "versions", xs @ _, "module-info.class") => MergeStrategy.discard
+      case x => (assembly / assemblyMergeStrategy).value(x)
+    },
     // Native image settings
-    Compile / mainClass := Some("red_pandas.main"), // Replace with your actual main class
+    Compile / mainClass := Some("red_pandas.main"),
     nativeImageOptions ++= Seq(
       "--no-fallback",
       "--initialize-at-build-time",

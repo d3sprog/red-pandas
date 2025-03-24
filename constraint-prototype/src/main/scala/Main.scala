@@ -4,7 +4,8 @@ import java.io.File
 
 case class Config(
     mode: String = "repl",
-    files: Seq[String] = Seq.empty
+    files: Seq[String] = Seq.empty,
+    python: Boolean = true
 ) 
 
 // by default launch the REPL
@@ -27,12 +28,18 @@ case class Config(
       .optional()
       .action((x, c) => c.copy(files = c.files :+ x))
       .text("files to process")
+    opt[Unit]('P', "no-python")
+      .action((x, c) => c.copy(python = false))
+      .text("Disable Python support")
+    opt[Unit]('p', "python")
+      .action((x, c) => c.copy(python = true))
+      .text("Enable Python support")
   }
 
   parser.parse(args, Config()) match {
     case Some(config) => config.mode match {
       case "repl" => {
-        val repl = new Repl()
+        val repl = Repl.start(config.python)
         for (file <- config.files) {
           repl.load_file(file)
         }
