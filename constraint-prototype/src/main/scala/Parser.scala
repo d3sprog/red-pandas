@@ -32,7 +32,7 @@ class Parser(env: Option[PythonEnvironment]) extends RegexParsers {
       )
       .toList
 
-    val template = (args: List[PythonEvaluatable]) => {
+    val template = (args: List[String]) => {
       var code = string
 
       if (variables.length != args.length) {
@@ -45,7 +45,7 @@ class Parser(env: Option[PythonEnvironment]) extends RegexParsers {
       for ((variable, i) <- variables.zipWithIndex) {
         code = code.replaceAllLiterally(
           "$" ++ variable.name,
-          args(i).python_representation()
+          args(i)
         )
       }
       code
@@ -80,7 +80,7 @@ class Parser(env: Option[PythonEnvironment]) extends RegexParsers {
     }
   def python_variable: Parser[PythonVariable] =
     "#p" ~ variable_stem ^^ { case _ ~ s => this.env match {
-      case Some(env) => python_var_from_string(s, env)
+      case Some(env) => PythonVariable(s, env)
       case None      => throw Exception("ERROR: Python environment not available")
     } }
   def pseudo_variable: Parser[PseudoVariable] =

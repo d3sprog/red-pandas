@@ -18,7 +18,8 @@ case class PythonEnvironment(kernel: IPythonKernel) extends AutoCloseable {
     }
 
     def eval(code: String): String = {
-      this.kernel.eval(code)
+      val result = this.kernel.eval(code)
+      result
     }
   
     @Override
@@ -30,29 +31,6 @@ case class PythonEnvironment(kernel: IPythonKernel) extends AutoCloseable {
 trait PythonEvaluatable {
   def python_representation(): String
 }
-
-object PythonEvaluatable {
-  given intAsPythonEvaluatable: Conversion[Int, PythonEvaluatable] with {
-    def apply(i: Int): PythonEvaluatable = new PythonEvaluatable {
-      override def python_representation(): String = i.toString
-    }
-  }
-
-  given stringAsPythonEvaluatable: Conversion[String, PythonEvaluatable] with {
-    def apply(s: String): PythonEvaluatable = new PythonEvaluatable {
-      override def python_representation(): String = s
-    }
-  }
-}
-
-
-extension (i: Int){
-  def python_representation(): String = i.toString
-}
-extension (s: String){
-  def python_representation(): String = s
-}
-
 
 final case class PythonVariable(python_name: String, env: PythonEnvironment)
     extends PythonEvaluatable {
@@ -69,13 +47,15 @@ final class PseudoVariable(val name: String) extends Identity {
   }
 }
 
-
-def python_var_from_string(string: String, env: PythonEnvironment): PythonVariable =
-  PythonVariable(string, env)
+def python_representation(term: Term): Option[String] = term match {
+  case term: PythonEvaluatable => Some(term.python_representation())
+  case term: String => Some("\"" ++ term ++ "\"")
+  case term: Int => Some(term.toString())
+}
 
 final case class PythonPredicate(
     args: List[Term],
-    template: (List[PythonEvaluatable]) => String,
+    template: (List[String]) => String,
     env: PythonEnvironment
 ) extends Substitutable,
       Foreign {
@@ -88,11 +68,14 @@ final case class PythonPredicate(
   }
 
   override def call(): Boolean =
-    if this.args.forall(_.isInstanceOf[PythonEvaluatable]) then {
-      val python_args = this.args.map(_.asInstanceOf[PythonEvaluatable])
-      val code = this.template(python_args)
+    val args_repr = this.args.map(python_representation(_))
+
+    if args_repr.forall(_.isDefined) then {
+      val python_args = args_repr.flatMap(x => x)
+      val code = this.template(python_args.toList)
       this.env.eval(code) == "True"
     } else {
+      println("WARN: Missing variables for Python predicate " ++ args_repr.filter(!_.isDefined).toString())
       val missing_variables =
         this.args.filter(!_.isInstanceOf[PythonEvaluatable])
       throw IncompleteCall(missing_variables)

@@ -53,7 +53,7 @@ class ParserTest extends munit.FunSuite {
         print_if_fail(parser, result)
         assert(result.successful)
         assert(result.get.tail.head.isInstanceOf[PythonPredicate])
-        assertEquals(result.get.tail.head.asInstanceOf[PythonPredicate].template(List(1)), "print(1)")
+        assertEquals(result.get.tail.head.asInstanceOf[PythonPredicate].template(List(1.toString())), "print(1)")
     }
 
     test("parse python variable") {
