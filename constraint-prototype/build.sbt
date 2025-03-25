@@ -30,6 +30,7 @@ lazy val root = project
     },
     // Native image settings
     Compile / mainClass := Some("red_pandas.main"),
+    nativeImageVersion := "22.3.0",
     nativeImageOptions ++= Seq(
       "--no-fallback",
       "--initialize-at-build-time",
