@@ -73,7 +73,12 @@ final case class PythonPredicate(
     if args_repr.forall(_.isDefined) then {
       val python_args = args_repr.flatMap(x => x)
       val code = this.template(python_args.toList)
-      this.env.eval(code) == "True"
+      val result = this.env.eval(code)
+      if result != "True" && result != "False" then {
+        println("ERROR: Python predicate returned invalid result: " ++ result)
+        println("Code: " ++ code)
+      }
+      result == "True"
     } else {
       println("WARN: Missing variables for Python predicate " ++ args_repr.filter(!_.isDefined).toString())
       val missing_variables =
